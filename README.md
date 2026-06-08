@@ -51,6 +51,36 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 npm run db:push
 > The `package.json#prisma is deprecated` line is a harmless Prisma 6→7 migration
 > warning, not an error.
 
+### Troubleshooting: wrong-platform esbuild / `tsx` seed fails
+
+`npm run db:seed` runs through `tsx`, which uses a native esbuild binary. If you see
+`You installed esbuild for another platform...` (e.g. a Linux binary on macOS), your
+`node_modules` was built on a different OS. Do a platform-clean install:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+Never share or sync a `node_modules` directory between platforms (Docker volumes,
+network drives, devcontainer mounts) — only source + `package.json`/`package-lock.json`
+should travel between machines.
+
+### Troubleshooting: `next.config.ts is not supported` / very old Next.js
+
+If `npm run dev` errors with `Configuring Next.js via 'next.config.ts' is not supported`
+or logs `[ wait ] starting the development server`, an ancient Next.js got installed.
+Check `grep '"next"' package.json` — it must be `16.2.7`. **Do not run
+`npm audit fix --force`**: it can rewrite `next` to a years-old version to "fix" a vuln,
+which breaks the App Router. If the pin drifted, restore it to `16.2.7`, then:
+
+```bash
+npm cache clean --force
+rm -rf node_modules package-lock.json
+npm install
+npx prisma generate     # regenerate the Prisma client after a fresh install
+```
+
 ## Test
 
 ```bash
