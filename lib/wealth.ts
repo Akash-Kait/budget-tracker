@@ -29,3 +29,30 @@ export function groupByType(assets: WealthAsset[]): WealthGroup[] {
     return { type, label: ASSET_TYPE_LABELS[type], assets: inType, subtotal: totalWealth(inType) };
   }).filter((g) => g.assets.length > 0);
 }
+
+export interface WealthAllocation {
+  type: AssetType;
+  label: string;
+  value: number;
+  pct: number; // 0–100, share of total wealth
+}
+
+/** Allocation of total wealth across asset types, fixed order, empty types omitted. */
+export function allocationByType(assets: WealthAsset[]): WealthAllocation[] {
+  const total = totalWealth(assets);
+  return ASSET_TYPES.map((type) => {
+    const value = totalWealth(assets.filter((a) => a.type === type));
+    return {
+      type,
+      label: ASSET_TYPE_LABELS[type],
+      value,
+      pct: total > 0 ? Math.round((value / total) * 100) : 0,
+    };
+  }).filter((a) => a.value > 0);
+}
+
+/** The single highest-value asset, or null when there are none. */
+export function largestHolding(assets: WealthAsset[]): WealthAsset | null {
+  if (assets.length === 0) return null;
+  return assets.reduce((max, a) => (assetValue(a) > assetValue(max) ? a : max));
+}

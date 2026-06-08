@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assetValue, totalWealth, groupByType } from '@/lib/wealth';
+import { assetValue, totalWealth, groupByType, allocationByType, largestHolding } from '@/lib/wealth';
 import type { WealthAsset } from '@/lib/types';
 
 function asset(p: Partial<WealthAsset>): WealthAsset {
@@ -49,5 +49,30 @@ describe('groupByType', () => {
     expect(g.map((x) => x.type)).toEqual(['MUTUAL_FUND', 'STOCK']);
     expect(g[0].subtotal).toBe(300);
     expect(g[1].subtotal).toBe(150);
+  });
+});
+
+describe('allocationByType', () => {
+  it('computes value and percentage per type in fixed order, omitting empty', () => {
+    const a = allocationByType([
+      asset({ type: 'STOCK', value: 250 }),
+      asset({ type: 'MUTUAL_FUND', value: 750 }),
+    ]);
+    expect(a.map((x) => x.type)).toEqual(['MUTUAL_FUND', 'STOCK']);
+    expect(a[0]).toMatchObject({ value: 750, pct: 75 });
+    expect(a[1]).toMatchObject({ value: 250, pct: 25 });
+  });
+  it('is empty for no assets', () => {
+    expect(allocationByType([])).toEqual([]);
+  });
+});
+
+describe('largestHolding', () => {
+  it('returns the highest-value asset', () => {
+    const big = asset({ name: 'Big', value: 9000 });
+    expect(largestHolding([asset({ value: 100 }), big, asset({ value: 500 })])).toBe(big);
+  });
+  it('is null when empty', () => {
+    expect(largestHolding([])).toBeNull();
   });
 });

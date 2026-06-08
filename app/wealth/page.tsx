@@ -1,31 +1,32 @@
 import { Card } from '@/components/Card';
-import { Money } from '@/components/Money';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
+import { WealthKpiCards } from '@/components/wealth/WealthKpiCards';
+import { AllocationDonut } from '@/components/wealth/AllocationDonut';
 import { getWealthAssets } from '@/lib/data';
-import { groupByType, totalWealth } from '@/lib/wealth';
+import { groupByType, totalWealth, allocationByType } from '@/lib/wealth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function WealthPage() {
   const assets = await getWealthAssets();
   const groups = groupByType(assets);
+  const total = totalWealth(assets);
+  const allocation = allocationByType(assets);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Wealth</h1>
-        <p className="text-sm text-gray-500">
-          Total:{' '}
-          <span className="text-lg font-bold text-gray-900">
-            <Money amount={totalWealth(assets)} />
-          </span>
-        </p>
-      </div>
+      <h1 className="text-2xl font-bold">Wealth</h1>
       <p className="text-sm text-gray-500">
         Investment assets, entered manually for now. These are tracked separately and never affect
         your planning reserve, projections, or the purchase simulator.
       </p>
+      <WealthKpiCards assets={assets} total={total} />
+      {assets.length > 0 && (
+        <Card title="Allocation by type">
+          <AllocationDonut data={allocation} total={total} />
+        </Card>
+      )}
       <Card title="Add asset">
         <WealthAssetForm />
       </Card>
