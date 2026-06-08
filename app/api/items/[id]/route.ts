@@ -4,9 +4,10 @@ import { itemSchema } from '@/lib/validation';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const item = await prisma.planItem.findUnique({ where: { id } });
+  const item = await prisma.planItem.findUnique({ where: { id }, include: { fundings: true } });
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(item);
+  const { fundings, ...rest } = item;
+  return NextResponse.json({ ...rest, fundedAmount: fundings.reduce((s, f) => s + f.amount, 0) });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +22,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       type: d.type,
       title: d.title,
       amount: d.amount,
-      fundedAmount: d.fundedAmount,
       priority: d.priority,
       dueDate: d.dueDate ? new Date(d.dueDate) : null,
       status: d.status ?? null,

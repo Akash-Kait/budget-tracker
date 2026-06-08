@@ -2,12 +2,13 @@ import { Card } from '@/components/Card';
 import { Money } from '@/components/Money';
 import { formatMonth } from '@/lib/format';
 import { getItems } from '@/lib/data';
+import { isActive } from '@/lib/finance';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TimelinePage() {
   const items = (await getItems())
-    .filter((i) => i.type !== 'WISHLIST' && i.dueDate)
+    .filter((i) => i.type !== 'WISHLIST' && i.dueDate && isActive(i))
     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
 
   return (

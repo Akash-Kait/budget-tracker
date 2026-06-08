@@ -6,6 +6,12 @@ import {
   sortQueue,
   projectFunding,
   simulatePurchase,
+  remaining,
+  isDone,
+  isActive,
+  totalFutureLiability,
+  reserveRecoveryMonths,
+  projectedCompletion,
 } from '@/lib/finance';
 import type { Item, Profile } from '@/lib/types';
 
@@ -153,5 +159,69 @@ describe('simulatePurchase', () => {
     const p = { ...profile, monthlyIncome: 100000, monthlyExpenses: 100000, monthlyInvestments: 0 };
     const r = simulatePurchase(p, goals, 50000);
     expect(r.monthsToRestore).toBeNull();
+  });
+});
+
+describe('remaining', () => {
+  it('is target minus funded, floored at 0', () => {
+    expect(remaining(item({ amount: 100000, fundedAmount: 60000 }))).toBe(40000);
+    expect(remaining(item({ amount: 100000, fundedAmount: 120000 }))).toBe(0);
+  });
+});
+
+describe('isDone / isActive', () => {
+  it('completed status is done', () => {
+    expect(isDone(item({ status: 'COMPLETED' }))).toBe(true);
+  });
+  it('purchased wishlist is done', () => {
+    expect(isDone(item({ type: 'WISHLIST', purchased: true }))).toBe(true);
+  });
+  it('planned item is active', () => {
+    expect(isActive(item({ status: 'PLANNED' }))).toBe(true);
+  });
+});
+
+describe('totalFutureLiability', () => {
+  it('sums remaining for active non-wishlist items', () => {
+    const items = [
+      item({ title: 'Laptop', type: 'COMMITMENT', amount: 100000, fundedAmount: 60000, priority: 5, dueDate: '2026-07-01T00:00:00.000Z' }),
+      item({ title: 'Car', type: 'GOAL', amount: 600000, fundedAmount: 120000, priority: 4, dueDate: '2028-01-01T00:00:00.000Z' }),
+      item({ title: 'Crocs', type: 'WISHLIST', amount: 5400, fundedAmount: 0 }),
+      item({ title: 'Done', type: 'GOAL', amount: 1000, fundedAmount: 0, status: 'COMPLETED' }),
+    ];
+    const r = totalFutureLiability(items);
+    expect(r.total).toBe(40000 + 480000);
+    expect(r.breakdown.map((b) => b.title)).toEqual(['Laptop', 'Car']);
+  });
+});
+
+describe('reserveRecoveryMonths', () => {
+  it('is deficit over surplus', () => {
+    expect(reserveRecoveryMonths(profile)).toBeCloseTo(1.6, 1); // 80000/50000
+  });
+  it('is null when surplus is zero', () => {
+    expect(
+      reserveRecoveryMonths({ ...profile, monthlyIncome: 100000, monthlyExpenses: 100000, monthlyInvestments: 0 }),
+    ).toBeNull();
+  });
+});
+
+describe('projectedCompletion', () => {
+  const from = '2026-06-01T00:00:00.000Z';
+  it('maps month index to a future date and flags behind target', () => {
+    const items = [
+      item({ id: 'car', title: 'Car', type: 'GOAL', priority: 4, amount: 600000, fundedAmount: 0, dueDate: '2026-08-01T00:00:00.000Z' }),
+    ];
+    const r = projectedCompletion(profile, items, from);
+    expect(r['car'].monthIndex).not.toBeNull();
+    expect(r['car'].isoDate).not.toBeNull();
+    expect(r['car'].behindMonths).toBeGreaterThan(0);
+  });
+  it('returns null projection when surplus cannot fund', () => {
+    const p = { ...profile, monthlyIncome: 100000, monthlyExpenses: 100000, monthlyInvestments: 0 };
+    const items = [item({ id: 'g', type: 'GOAL', amount: 100000, fundedAmount: 0, dueDate: from })];
+    const r = projectedCompletion(p, items, from);
+    expect(r['g'].monthIndex).toBeNull();
+    expect(r['g'].behindMonths).toBeNull();
   });
 });

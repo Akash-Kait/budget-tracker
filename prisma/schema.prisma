@@ -19,18 +19,30 @@ model FinancialProfile {
 }
 
 model PlanItem {
-  id                String    @id @default(cuid())
+  id                String               @id @default(cuid())
   type              String // COMMITMENT | GOAL | EXPERIENCE | WISHLIST
   title             String
-  amount            Float     @default(0)
-  fundedAmount      Float     @default(0)
-  priority          Int       @default(3)
+  amount            Float                @default(0)
+  priority          Int                  @default(3)
   dueDate           DateTime?
-  status            String? // PLANNED | FUNDED | COMPLETED (commitments)
+  status            String? // PLANNED | FUNDED | COMPLETED (any type)
   notes             String?
-  coolingPeriodDays Int       @default(30)
-  dateAdded         DateTime  @default(now())
-  purchased         Boolean   @default(false)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  coolingPeriodDays Int                  @default(30)
+  dateAdded         DateTime             @default(now())
+  purchased         Boolean              @default(false)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  fundings          FundingTransaction[]
+}
+
+model FundingTransaction {
+  id        String   @id @default(cuid())
+  itemId    String
+  item      PlanItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  amount    Float
+  note      String?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
 }

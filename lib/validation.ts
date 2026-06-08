@@ -15,7 +15,6 @@ export const itemSchema = z
     type: z.enum(ITEM_TYPES),
     title: z.string().min(1),
     amount: z.number().min(0),
-    fundedAmount: z.number().min(0).default(0),
     priority: z.number().int().min(1).max(5),
     dueDate: z.string().datetime().nullable().optional(),
     status: z.enum(STATUSES).nullable().optional(),
@@ -26,6 +25,11 @@ export const itemSchema = z
     message: 'dueDate is required for non-wishlist items',
     path: ['dueDate'],
   });
+
+export const fundingSchema = z.object({
+  amount: z.number().positive(),
+  note: z.string().optional(),
+});
 
 export const simulateSchema = z.object({
   name: z.string().optional(),

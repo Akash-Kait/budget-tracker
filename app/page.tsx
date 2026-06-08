@@ -2,7 +2,15 @@ import { Card } from '@/components/Card';
 import { Money } from '@/components/Money';
 import { ProgressBar } from '@/components/ProgressBar';
 import { getProfile, getItems } from '@/lib/data';
-import { monthlySurplus, reserveDeficit, sortQueue, fundingProgress } from '@/lib/finance';
+import {
+  monthlySurplus,
+  reserveDeficit,
+  sortQueue,
+  fundingProgress,
+  isActive,
+  reserveRecoveryMonths,
+  totalFutureLiability,
+} from '@/lib/finance';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +24,9 @@ export default async function Dashboard() {
       ? Math.round((profile.reserveCurrent / profile.reserveTarget) * 100)
       : 0;
 
-  const topUnfunded = sortQueue(items).find((i) => fundingProgress(i).pct < 100);
+  const recoveryMonths = reserveRecoveryMonths(profile);
+  const liability = totalFutureLiability(items);
+  const topUnfunded = sortQueue(items.filter(isActive)).find((i) => fundingProgress(i).pct < 100);
 
   return (
     <div className="space-y-6">
@@ -43,6 +53,9 @@ export default async function Dashboard() {
               Deficit: <Money amount={deficit} />
             </p>
           )}
+          <p className="mt-1 text-xs text-gray-500">
+            Recovery: {recoveryMonths === null ? '—' : `${recoveryMonths.toFixed(1)} months`}
+          </p>
         </Card>
         <Card title="Monthly Surplus">
           <p className={`text-2xl font-bold ${surplus < 0 ? 'text-red-600' : ''}`}>
@@ -70,6 +83,26 @@ export default async function Dashboard() {
           </div>
         </Card>
       )}
+      <Card title="Total Future Liability">
+        {liability.breakdown.length === 0 ? (
+          <p className="text-sm text-gray-500">No outstanding obligations.</p>
+        ) : (
+          <>
+            <ul className="space-y-1 text-sm">
+              {liability.breakdown.map((b) => (
+                <li key={b.title} className="flex justify-between">
+                  <span>{b.title}</span>
+                  <Money amount={b.remaining} />
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 flex justify-between border-t border-gray-200 pt-2 font-bold">
+              <span>Total</span>
+              <Money amount={liability.total} />
+            </p>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

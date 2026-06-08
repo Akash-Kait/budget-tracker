@@ -171,6 +171,75 @@ export function simulatePurchase(p: Profile, items: Item[], cost: number): Simul
   };
 }
 
+export function remaining(item: Item): number {
+  return Math.max(0, item.amount - item.fundedAmount);
+}
+
+export function isDone(item: Item): boolean {
+  return item.status === 'COMPLETED' || (item.type === 'WISHLIST' && item.purchased);
+}
+
+export function isActive(item: Item): boolean {
+  return !isDone(item);
+}
+
+export function totalFutureLiability(items: Item[]): {
+  total: number;
+  breakdown: { title: string; remaining: number }[];
+} {
+  const active = sortQueue(items).filter((i) => isActive(i) && remaining(i) > 0);
+  const breakdown = active.map((i) => ({ title: i.title, remaining: remaining(i) }));
+  const total = breakdown.reduce((s, b) => s + b.remaining, 0);
+  return { total, breakdown };
+}
+
+export function reserveRecoveryMonths(p: Profile): number | null {
+  const surplus = monthlySurplus(p);
+  if (surplus <= 0) return null;
+  return reserveDeficit(p) / surplus;
+}
+
+export interface ProjectedItem {
+  monthIndex: number | null;
+  isoDate: string | null;
+  behindMonths: number | null;
+}
+
+function addMonths(iso: string, months: number): Date {
+  const d = new Date(iso);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1));
+}
+
+function monthsBetween(a: Date, b: Date): number {
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
+}
+
+export function projectedCompletion(
+  p: Profile,
+  items: Item[],
+  fromIso: string,
+): Record<string, ProjectedItem> {
+  const active = items.filter(isActive);
+  const proj = projectFunding(p, active, {});
+  const out: Record<string, ProjectedItem> = {};
+  for (const it of active) {
+    const monthIndex = proj.completionMonth[it.id] ?? null;
+    if (monthIndex === null) {
+      out[it.id] = { monthIndex: null, isoDate: null, behindMonths: null };
+      continue;
+    }
+    const date = addMonths(fromIso, monthIndex);
+    let behindMonths: number | null = null;
+    if (it.dueDate) {
+      const due = new Date(it.dueDate);
+      const dueMonth = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), 1));
+      behindMonths = Math.max(0, monthsBetween(dueMonth, date));
+    }
+    out[it.id] = { monthIndex, isoDate: date.toISOString(), behindMonths };
+  }
+  return out;
+}
+
 function buildMessage(
   reductionPct: number,
   goalImpacts: GoalImpact[],

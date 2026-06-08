@@ -5,6 +5,7 @@ const links = [
   { href: '/queue', label: 'Priority Queue' },
   { href: '/timeline', label: 'Timeline' },
   { href: '/wishlist', label: 'Wishlist' },
+  { href: '/history', label: 'History' },
   { href: '/simulator', label: 'Simulator' },
   { href: '/settings', label: 'Settings' },
 ];

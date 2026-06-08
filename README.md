@@ -59,16 +59,28 @@ npm test            # vitest unit tests for the finance + format logic
 
 ## Views
 
-- **Dashboard** — Protected Capital, Opportunity Reserve (with deficit + progress),
-  Monthly Surplus (income − expenses − investments), and the highest-priority unfunded item.
-- **Priority Queue** — every non-wishlist item sorted by priority (highest first) then
-  due date; create / edit / delete inline.
-- **Timeline** — commitments, goals, and experiences in chronological order.
+- **Dashboard** — Protected Capital, Opportunity Reserve (deficit, progress, and **recovery
+  time** = deficit ÷ monthly surplus), Monthly Surplus (income − expenses − investments),
+  the highest-priority unfunded item, and a **Total Future Liability** card summing the
+  remaining funding needed across all active commitments, goals, and experiences.
+- **Priority Queue** — active items sorted by priority (highest first) then due date. Each
+  row shows funding progress, **remaining amount**, and a **projected completion date** with
+  an "on track / ⚠ behind by N months" flag. Inline **Edit**, **Complete**, **Delete**, and
+  an **Add Funding** panel with transaction history.
+- **Timeline** — active commitments, goals, and experiences in chronological order.
 - **Wishlist** — discretionary wants with a cooling-period guard: "Mark purchased" stays
   disabled until `dateAdded + coolingPeriodDays` has passed.
+- **History** — completed items and purchased wishlist items, kept as a record.
 - **Simulator** — enter a cost and see reserve before/after, % reduction, months to restore
   the reserve, per-goal delays, and a colour-coded **SAFE / CAUTION / WAIT** verdict.
 - **Settings** — edit the financial profile (reserves, monthly figures).
+
+## Funding model
+
+Funding is tracked as **transactions**, not a single editable number. Each "Add Funding"
+entry (amount + optional note + date) is stored, and an item's funded amount is the **sum of
+its transactions** — giving an auditable history (`Jul 2026 +₹25,000 — July Salary`). Items
+are created at ₹0 funded; you add funding over time.
 
 ## How the simulator works
 
@@ -84,5 +96,7 @@ Currency is INR (₹). Single-user, no authentication (MVP).
 
 ## Docs
 
-- Design spec: `docs/superpowers/specs/2026-06-07-financial-priority-planner-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-06-07-financial-priority-planner.md`
+- Design spec (MVP): `docs/superpowers/specs/2026-06-07-financial-priority-planner-design.md`
+- Implementation plan (MVP): `docs/superpowers/plans/2026-06-07-financial-priority-planner.md`
+- Design spec (iteration 2, P0+P1): `docs/superpowers/specs/2026-06-07-planner-iteration-2-design.md`
+- Implementation plan (iteration 2): `docs/superpowers/plans/2026-06-07-planner-iteration-2.md`

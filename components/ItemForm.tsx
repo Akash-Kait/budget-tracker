@@ -12,7 +12,6 @@ export function ItemForm({ initial, defaultType, onDone }: Props) {
     type: (initial?.type ?? defaultType ?? 'COMMITMENT') as ItemType,
     title: initial?.title ?? '',
     amount: initial?.amount ?? 0,
-    fundedAmount: initial?.fundedAmount ?? 0,
     priority: initial?.priority ?? 3,
     dueDate: initial?.dueDate ? initial.dueDate.slice(0, 10) : '',
     status: initial?.status ?? 'PLANNED',
@@ -36,7 +35,6 @@ export function ItemForm({ initial, defaultType, onDone }: Props) {
       type: form.type,
       title: form.title,
       amount: Number(form.amount),
-      fundedAmount: Number(form.fundedAmount),
       priority: Number(form.priority),
       dueDate:
         form.type !== 'WISHLIST' && form.dueDate ? new Date(form.dueDate).toISOString() : null,
@@ -55,7 +53,7 @@ export function ItemForm({ initial, defaultType, onDone }: Props) {
       return;
     }
     if (!initial) {
-      setForm({ ...form, title: '', amount: 0, fundedAmount: 0, dueDate: '', notes: '' });
+      setForm({ ...form, title: '', amount: 0, dueDate: '', notes: '' });
     }
     onDone?.();
     router.refresh();
@@ -87,13 +85,6 @@ export function ItemForm({ initial, defaultType, onDone }: Props) {
         placeholder="Amount"
         value={form.amount}
         onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-      />
-      <input
-        className={input}
-        type="number"
-        placeholder="Funded"
-        value={form.fundedAmount}
-        onChange={(e) => setForm({ ...form, fundedAmount: Number(e.target.value) })}
       />
       <select
         className={input}

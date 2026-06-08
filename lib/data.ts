@@ -14,13 +14,16 @@ export async function getProfile(): Promise<Profile> {
 }
 
 export async function getItems(): Promise<Item[]> {
-  const rows = await prisma.planItem.findMany({ orderBy: { createdAt: 'asc' } });
+  const rows = await prisma.planItem.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: { fundings: true },
+  });
   return rows.map((r) => ({
     id: r.id,
     type: r.type as Item['type'],
     title: r.title,
     amount: r.amount,
-    fundedAmount: r.fundedAmount,
+    fundedAmount: r.fundings.reduce((s, f) => s + f.amount, 0),
     priority: r.priority,
     dueDate: r.dueDate ? r.dueDate.toISOString() : null,
     status: r.status as Item['status'],
@@ -29,4 +32,8 @@ export async function getItems(): Promise<Item[]> {
     dateAdded: r.dateAdded.toISOString(),
     purchased: r.purchased,
   }));
+}
+
+export async function getFundings(itemId: string) {
+  return prisma.fundingTransaction.findMany({ where: { itemId }, orderBy: { date: 'desc' } });
 }

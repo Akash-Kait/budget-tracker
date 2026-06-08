@@ -7,7 +7,7 @@ import { daysUntil } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function WishlistPage() {
-  const items = (await getItems()).filter((i) => i.type === 'WISHLIST');
+  const items = (await getItems()).filter((i) => i.type === 'WISHLIST' && !i.purchased);
   const now = new Date().toISOString();
   const withDays = items.map((i) => {
     const expiry = new Date(i.dateAdded);
