@@ -11,15 +11,17 @@ export function LiabilityTreemap({ data }: { data: { title: string; remaining: n
         return (
           <div
             key={d.title}
-            className="flex min-w-[90px] flex-col justify-between rounded-lg p-3 text-white"
+            className="flex min-w-[90px] flex-col justify-between gap-1 overflow-hidden rounded-lg p-3 text-white"
             style={{
               flexGrow: Math.max(1, Math.round(share * 100)),
               flexBasis: `${Math.max(15, share * 100)}%`,
               backgroundImage: `linear-gradient(155deg, ${colorFor(idx)}, ${colorFor(idx)}99)`,
             }}
           >
-            <span className="text-sm font-semibold">{d.title}</span>
-            <span className="text-xs opacity-90">
+            <span title={d.title} className="block min-w-0 truncate text-[13px] font-semibold leading-tight">
+              {d.title}
+            </span>
+            <span className="block min-w-0 truncate text-xs opacity-90">
               {formatINR(d.remaining)} · {Math.round(share * 100)}%
             </span>
           </div>
