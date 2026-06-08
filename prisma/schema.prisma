@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model FinancialProfile {
+  id                 Int      @id @default(1)
+  protectedCapital   Float    @default(0)
+  reserveTarget      Float    @default(0)
+  reserveCurrent     Float    @default(0)
+  monthlyIncome      Float    @default(0)
+  monthlyExpenses    Float    @default(0)
+  monthlyInvestments Float    @default(0)
+  updatedAt          DateTime @updatedAt
+}
+
+model PlanItem {
+  id                String    @id @default(cuid())
+  type              String // COMMITMENT | GOAL | EXPERIENCE | WISHLIST
+  title             String
+  amount            Float     @default(0)
+  fundedAmount      Float     @default(0)
+  priority          Int       @default(3)
+  dueDate           DateTime?
+  status            String? // PLANNED | FUNDED | COMPLETED (commitments)
+  notes             String?
+  coolingPeriodDays Int       @default(30)
+  dateAdded         DateTime  @default(now())
+  purchased         Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}

@@ -1,0 +1,157 @@
+import { describe, it, expect } from 'vitest';
+import {
+  monthlySurplus,
+  reserveDeficit,
+  fundingProgress,
+  sortQueue,
+  projectFunding,
+  simulatePurchase,
+} from '@/lib/finance';
+import type { Item, Profile } from '@/lib/types';
+
+const profile: Profile = {
+  protectedCapital: 200000,
+  reserveTarget: 500000,
+  reserveCurrent: 420000,
+  monthlyIncome: 150000,
+  monthlyExpenses: 70000,
+  monthlyInvestments: 30000,
+};
+
+function item(p: Partial<Item>): Item {
+  return {
+    id: Math.random().toString(36).slice(2),
+    type: 'GOAL',
+    title: 't',
+    amount: 100000,
+    fundedAmount: 0,
+    priority: 3,
+    dueDate: null,
+    status: null,
+    notes: null,
+    coolingPeriodDays: 30,
+    dateAdded: '2026-06-07T00:00:00.000Z',
+    purchased: false,
+    ...p,
+  };
+}
+
+describe('monthlySurplus', () => {
+  it('is income - expenses - investments', () => {
+    expect(monthlySurplus(profile)).toBe(50000);
+  });
+});
+
+describe('reserveDeficit', () => {
+  it('is positive target minus current', () => {
+    expect(reserveDeficit(profile)).toBe(80000);
+  });
+  it('is 0 when current exceeds target', () => {
+    expect(reserveDeficit({ ...profile, reserveCurrent: 600000 })).toBe(0);
+  });
+});
+
+describe('fundingProgress', () => {
+  it('computes percentage', () => {
+    expect(fundingProgress(item({ amount: 100000, fundedAmount: 60000 }))).toEqual({
+      funded: 60000,
+      target: 100000,
+      pct: 60,
+    });
+  });
+  it('returns 0 pct when target is 0', () => {
+    expect(fundingProgress(item({ amount: 0, fundedAmount: 0 })).pct).toBe(0);
+  });
+});
+
+describe('sortQueue', () => {
+  it('sorts priority desc then due date asc, excludes wishlist', () => {
+    const items = [
+      item({ title: 'Car', priority: 4, dueDate: '2027-01-01T00:00:00.000Z' }),
+      item({ title: 'Laptop', priority: 5, dueDate: '2026-07-01T00:00:00.000Z', type: 'COMMITMENT' }),
+      item({ title: 'Wedding', priority: 5, dueDate: '2026-08-01T00:00:00.000Z', type: 'COMMITMENT' }),
+      item({ title: 'Crocs', priority: 5, type: 'WISHLIST' }),
+    ];
+    expect(sortQueue(items).map((i) => i.title)).toEqual(['Laptop', 'Wedding', 'Car']);
+  });
+});
+
+describe('projectFunding', () => {
+  it('refills reserve first, then funds items by priority', () => {
+    const p = { ...profile };
+    const items = [
+      item({ id: 'a', title: 'Laptop', type: 'COMMITMENT', priority: 5, amount: 100000, fundedAmount: 0 }),
+    ];
+    const res = projectFunding(p, items, {});
+    // surplus 50k. reserve deficit 80k => m1 refill 50k, m2 refill 30k leaving 20k for items.
+    // m2 items=20k, m3 +50k=70k, m4 +50k=120k>=100k => month 4.
+    expect(res.completionMonth['a']).toBe(4);
+  });
+
+  it('honors startReserve override (purchase scenario lowers reserve)', () => {
+    const p = { ...profile };
+    const items = [item({ id: 'a', title: 'Laptop', type: 'COMMITMENT', priority: 5, amount: 100000 })];
+    const res = projectFunding(p, items, { startReserve: 300000 });
+    expect(res.completionMonth['a']).toBeGreaterThan(4);
+  });
+
+  it('never funds wishlist items', () => {
+    const items = [item({ id: 'w', type: 'WISHLIST', amount: 5000, priority: 5 })];
+    const res = projectFunding({ ...profile }, items, {});
+    expect(res.completionMonth['w']).toBeUndefined();
+  });
+
+  it('caps at the horizon when surplus cannot fund an item', () => {
+    const p = { ...profile, monthlyIncome: 100000, monthlyExpenses: 100000, monthlyInvestments: 0 };
+    const items = [item({ id: 'a', type: 'GOAL', amount: 100000, fundedAmount: 0 })];
+    const res = projectFunding(p, items, {});
+    expect(res.completionMonth['a']).toBeUndefined();
+  });
+});
+
+describe('simulatePurchase', () => {
+  const goals: Item[] = [
+    item({
+      id: 'car',
+      title: 'Car',
+      type: 'GOAL',
+      priority: 4,
+      amount: 600000,
+      fundedAmount: 0,
+      dueDate: '2028-01-01T00:00:00.000Z',
+    }),
+  ];
+
+  it('small purchase is SAFE with no goal impact', () => {
+    const r = simulatePurchase({ ...profile }, goals, 5400);
+    expect(r.reserveBefore).toBe(420000);
+    expect(r.reserveAfter).toBe(414600);
+    expect(r.recommendation).toBe('SAFE');
+    expect(r.goalImpacts.every((g) => g.delayMonths === 0)).toBe(true);
+  });
+
+  it('large purchase that delays a goal recommends WAIT', () => {
+    const r = simulatePurchase({ ...profile }, goals, 200000);
+    expect(r.reserveAfter).toBe(220000);
+    const car = r.goalImpacts.find((g) => g.title === 'Car');
+    expect(car!.delayMonths).toBeGreaterThan(0);
+    expect(r.recommendation).toBe('WAIT');
+  });
+
+  it('purchase larger than reserve recommends WAIT and flags negative', () => {
+    const r = simulatePurchase({ ...profile }, goals, 500000);
+    expect(r.reserveAfter).toBeLessThan(0);
+    expect(r.recommendation).toBe('WAIT');
+  });
+
+  it('reports reductionPct', () => {
+    const r = simulatePurchase({ ...profile }, goals, 42000);
+    expect(Math.round(r.reductionPct * 10) / 10).toBe(10);
+  });
+
+  it('zero surplus yields null monthsToRestore', () => {
+    const p = { ...profile, monthlyIncome: 100000, monthlyExpenses: 100000, monthlyInvestments: 0 };
+    const r = simulatePurchase(p, goals, 50000);
+    expect(r.monthsToRestore).toBeNull();
+  });
+});
