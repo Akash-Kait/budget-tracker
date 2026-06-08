@@ -89,10 +89,18 @@ npm test            # vitest unit tests for the finance + format logic
 
 ## Views
 
-- **Dashboard** — Protected Capital, Opportunity Reserve (deficit, progress, and **recovery
-  time** = deficit ÷ monthly surplus), Monthly Surplus (income − expenses − investments),
-  the highest-priority unfunded item, and a **Total Future Liability** card summing the
-  remaining funding needed across all active commitments, goals, and experiences.
+- **Dashboard** — a visual overview (zero charting dependencies — built with Tailwind + SVG):
+  - **KPI row:** Reserve Health %, Future Funding Needed, Top Unfunded, Months to Fully Fund,
+    Monthly Surplus.
+  - **Quick What-If:** enter an item name + cost and the whole dashboard recomputes from a
+    *simulated* reserve (nothing is saved) — gauge, recovery time, and the surplus projection
+    all shift, with a SAFE/CAUTION/WAIT banner and goal-delay summary. "Clear Simulation" restores actuals.
+  - **Reserve Health** radial gauge (green ≥90% / amber 70–89% / red <70%).
+  - **Funding Progress** bars per active item.
+  - **Future Liability Breakdown** proportional treemap (largest remaining obligation dominates).
+  - **Goal Timeline** of upcoming due dates.
+  - **Monthly Surplus Projection** — 12-month stacked bars showing how surplus is projected to
+    refill the reserve and fund items by priority.
 - **Priority Queue** — active items sorted by priority (highest first), then manual rank,
   then due date. Each row shows funding progress, **remaining amount**, and a **projected
   completion date** with an "on track / ⚠ behind by N months" flag. Inline **Edit**,
@@ -136,3 +144,5 @@ Currency is INR (₹). Single-user, no authentication (MVP).
 - Implementation plan (iteration 2): `docs/superpowers/plans/2026-06-07-planner-iteration-2.md`
 - Design spec (iteration 3, P2): `docs/superpowers/specs/2026-06-07-planner-iteration-3-design.md`
 - Implementation plan (iteration 3): `docs/superpowers/plans/2026-06-07-planner-iteration-3.md`
+- Design spec (iteration 4, dashboard visualization): `docs/superpowers/specs/2026-06-07-dashboard-visualization-design.md`
+- Implementation plan (iteration 4): `docs/superpowers/plans/2026-06-07-dashboard-visualization.md`

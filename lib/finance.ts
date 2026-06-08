@@ -176,6 +176,71 @@ export function remaining(item: Item): number {
   return Math.max(0, item.amount - item.fundedAmount);
 }
 
+export function monthsToFullyFund(p: Profile, items: Item[]): number | null {
+  const surplus = monthlySurplus(p);
+  if (surplus <= 0) return null;
+  return totalFutureLiability(items).total / surplus;
+}
+
+export interface MonthlyAllocation {
+  month: string; // 'Mon YYYY'
+  reserve: number;
+  items: { id: string; title: string; amount: number }[];
+}
+
+export interface AllocationOpts {
+  months?: number;
+  fromIso: string;
+  startReserve?: number;
+}
+
+/**
+ * Month-by-month allocation of monthly surplus over a horizon, recording how much
+ * each month went to reserve refill and to each fundable item (priority/rank order).
+ * Reuses the same allocation rule as projectFunding. Pure.
+ */
+export function projectMonthlyAllocation(
+  p: Profile,
+  items: Item[],
+  opts: AllocationOpts,
+): MonthlyAllocation[] {
+  const months = opts.months ?? 12;
+  const surplus = Math.max(0, monthlySurplus(p));
+  let reserve = opts.startReserve ?? p.reserveCurrent;
+
+  const fundable = sortQueue(items).filter((i) => i.status !== 'COMPLETED' && !i.purchased);
+  const funded: Record<string, number> = {};
+  fundable.forEach((i) => (funded[i.id] = i.fundedAmount));
+
+  const out: MonthlyAllocation[] = [];
+  const from = new Date(opts.fromIso);
+  for (let m = 0; m < months; m++) {
+    const label = new Date(
+      Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + m, 1),
+    ).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const entry: MonthlyAllocation = { month: label, reserve: 0, items: [] };
+    let pool = surplus;
+
+    if (pool > 0 && reserve < p.reserveTarget) {
+      const add = Math.min(p.reserveTarget - reserve, pool);
+      reserve += add;
+      pool -= add;
+      entry.reserve = add;
+    }
+    for (const it of fundable) {
+      if (pool <= 0) break;
+      const need = it.amount - funded[it.id];
+      if (need <= 0) continue;
+      const add = Math.min(need, pool);
+      funded[it.id] += add;
+      pool -= add;
+      entry.items.push({ id: it.id, title: it.title, amount: add });
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
 export function isDone(item: Item): boolean {
   return item.status === 'COMPLETED' || (item.type === 'WISHLIST' && item.purchased);
 }

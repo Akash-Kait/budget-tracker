@@ -1,0 +1,30 @@
+import { formatINR } from '@/lib/format';
+import { colorFor } from '@/lib/colors';
+
+export function LiabilityTreemap({ data }: { data: { title: string; remaining: number }[] }) {
+  if (data.length === 0) return <p className="text-sm text-gray-500">No outstanding obligations.</p>;
+  const total = data.reduce((s, d) => s + d.remaining, 0);
+  return (
+    <div className="flex h-56 w-full flex-wrap gap-1">
+      {data.map((d, idx) => {
+        const share = total > 0 ? d.remaining / total : 0;
+        return (
+          <div
+            key={d.title}
+            className="flex min-w-[90px] flex-col justify-between rounded-lg p-3 text-white"
+            style={{
+              flexGrow: Math.max(1, Math.round(share * 100)),
+              flexBasis: `${Math.max(15, share * 100)}%`,
+              backgroundColor: colorFor(idx),
+            }}
+          >
+            <span className="text-sm font-semibold">{d.title}</span>
+            <span className="text-xs opacity-90">
+              {formatINR(d.remaining)} · {Math.round(share * 100)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

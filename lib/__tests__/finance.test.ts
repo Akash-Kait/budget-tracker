@@ -12,6 +12,8 @@ import {
   totalFutureLiability,
   reserveRecoveryMonths,
   projectedCompletion,
+  monthsToFullyFund,
+  projectMonthlyAllocation,
 } from '@/lib/finance';
 import type { Item, Profile } from '@/lib/types';
 
@@ -235,5 +237,49 @@ describe('sortQueue rank tiebreak', () => {
       item({ title: 'C', priority: 4, rank: 0, type: 'GOAL', dueDate: '2026-06-01T00:00:00.000Z' }),
     ];
     expect(sortQueue(items).map((i) => i.title)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('monthsToFullyFund', () => {
+  it('is total remaining over surplus', () => {
+    const items = [
+      item({ title: 'A', type: 'COMMITMENT', amount: 100000, fundedAmount: 0, priority: 5, dueDate: '2026-07-01T00:00:00.000Z' }),
+    ];
+    expect(monthsToFullyFund(profile, items)).toBeCloseTo(2, 5);
+  });
+  it('is null when surplus <= 0', () => {
+    expect(
+      monthsToFullyFund({ ...profile, monthlyIncome: 100000, monthlyExpenses: 100000, monthlyInvestments: 0 }, []),
+    ).toBeNull();
+  });
+});
+
+describe('projectMonthlyAllocation', () => {
+  const from = '2026-06-01T00:00:00.000Z';
+  it('returns one entry per month of the horizon', () => {
+    const r = projectMonthlyAllocation(profile, [], { months: 12, fromIso: from });
+    expect(r).toHaveLength(12);
+    expect(r[0].month).toBe('Jun 2026');
+  });
+  it('allocates to reserve refill before items', () => {
+    const items = [item({ id: 'a', title: 'Laptop', type: 'COMMITMENT', priority: 5, amount: 100000, fundedAmount: 0, dueDate: from })];
+    const r = projectMonthlyAllocation(profile, items, { months: 3, fromIso: from });
+    expect(r[0].reserve).toBe(50000);
+    expect(r[0].items).toHaveLength(0);
+    expect(r[1].reserve).toBe(30000);
+    expect(r[1].items[0]).toMatchObject({ id: 'a', amount: 20000 });
+  });
+  it('never allocates to wishlist', () => {
+    const items = [item({ id: 'w', type: 'WISHLIST', amount: 5000, priority: 5 })];
+    const r = projectMonthlyAllocation(profile, items, { months: 3, fromIso: from });
+    expect(r.every((m) => m.items.length === 0)).toBe(true);
+  });
+  it('honors startReserve (simulated lower reserve delays item funding)', () => {
+    const items = [item({ id: 'a', title: 'L', type: 'COMMITMENT', priority: 5, amount: 100000, fundedAmount: 0, dueDate: from })];
+    const base = projectMonthlyAllocation(profile, items, { months: 6, fromIso: from });
+    const sim = projectMonthlyAllocation(profile, items, { months: 6, fromIso: from, startReserve: 200000 });
+    const baseItemTotal = base.reduce((s, m) => s + (m.items[0]?.amount ?? 0), 0);
+    const simItemTotal = sim.reduce((s, m) => s + (m.items[0]?.amount ?? 0), 0);
+    expect(simItemTotal).toBeLessThan(baseItemTotal);
   });
 });
