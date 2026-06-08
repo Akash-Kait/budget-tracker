@@ -303,3 +303,26 @@ describe('projectMonthlyAllocation', () => {
     expect(simItemTotal).toBeLessThan(baseItemTotal);
   });
 });
+
+describe('projection engine consistency (shared runAllocation core)', () => {
+  it('the month an item first reaches its target in projectMonthlyAllocation == projectFunding completionMonth', () => {
+    const from = '2026-06-01T00:00:00.000Z';
+    const items = [
+      item({ id: 'a', title: 'Laptop', type: 'COMMITMENT', priority: 5, amount: 100000, fundedAmount: 0, dueDate: from }),
+      item({ id: 'b', title: 'Car', type: 'GOAL', priority: 4, amount: 300000, fundedAmount: 0, dueDate: from }),
+    ];
+    const completion = projectFunding(profile, items, {}).completionMonth;
+    const months = projectMonthlyAllocation(profile, items, { months: 120, fromIso: from });
+    for (const id of ['a', 'b']) {
+      const cum: Record<string, number> = {};
+      let firstFull: number | undefined;
+      months.forEach((m, idx) => {
+        const add = m.items.find((x) => x.id === id)?.amount ?? 0;
+        cum[id] = (cum[id] ?? 0) + add;
+        const target = items.find((x) => x.id === id)!.amount;
+        if (firstFull === undefined && cum[id] >= target) firstFull = idx + 1; // 1-based
+      });
+      expect(firstFull).toBe(completion[id]);
+    }
+  });
+});

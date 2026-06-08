@@ -39,28 +39,43 @@ export interface ProjectOpts {
 }
 
 /**
- * Month-by-month allocation of monthly surplus.
- * Each month: add surplus to pool, refill Opportunity Reserve to target first,
- * then fund queue items (priority desc, due asc), skipping wishlist/completed/purchased.
- */
-/**
  * Round a money amount to whole paise. Money is stored as Float, and the projection
- * engines accumulate `+=` over up to 120 iterations, so without rounding a value can
- * land at e.g. 99999.99999997 and fail a `funded >= amount` check by an epsilon —
- * pushing an item's completion month out by one and flipping "on track" ↔ "behind".
+ * accumulates `+=` over up to 120 iterations, so without rounding a value can land at
+ * e.g. 99999.99999997 and fail a `funded >= amount` check by an epsilon — pushing an
+ * item's completion month out by one and flipping "on track" ↔ "behind".
  */
 export function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function projectFunding(p: Profile, items: Item[], opts: ProjectOpts): ProjectionResult {
+interface AllocationStep {
+  reserveAdded: number;
+  items: { id: string; title: string; amount: number }[];
+}
+
+interface AllocationRun {
+  /** one entry per simulated month; index 0 = the first surplus month (= projectFunding month 1) */
+  steps: AllocationStep[];
+  /** item id -> 1-based month index it reaches its amount (0 if already fully funded) */
+  completionMonth: Record<string, number>;
+}
+
+/**
+ * THE planning allocation rule, single source of truth. Each month: add monthly surplus,
+ * refill the Opportunity Reserve to target first, then fund active queue items in
+ * priority/rank order (skipping wishlist/completed/purchased). `projectFunding` and
+ * `projectMonthlyAllocation` are thin wrappers so the queue's projected dates and the
+ * dashboard's allocation chart can never drift apart.
+ */
+function runAllocation(
+  p: Profile,
+  items: Item[],
+  opts: { months: number; startReserve?: number },
+): AllocationRun {
   const surplus = Math.max(0, monthlySurplus(p));
-  const horizon = opts.horizon ?? 120;
   let reserve = opts.startReserve ?? p.reserveCurrent;
 
-  const fundable = sortQueue(items).filter(
-    (i) => i.status !== 'COMPLETED' && !i.purchased,
-  );
+  const fundable = sortQueue(items).filter((i) => i.status !== 'COMPLETED' && !i.purchased);
   const funded: Record<string, number> = {};
   fundable.forEach((i) => (funded[i.id] = i.fundedAmount));
 
@@ -70,36 +85,48 @@ export function projectFunding(p: Profile, items: Item[], opts: ProjectOpts): Pr
     if (funded[i.id] >= i.amount && i.amount > 0) completionMonth[i.id] = 0;
   });
 
-  for (let month = 1; month <= horizon; month++) {
+  const steps: AllocationStep[] = [];
+  for (let month = 1; month <= opts.months; month++) {
+    const step: AllocationStep = { reserveAdded: 0, items: [] };
     let pool = surplus;
-    if (pool <= 0) break;
 
     // 1. refill reserve to target
-    if (reserve < p.reserveTarget) {
-      const need = p.reserveTarget - reserve;
-      const add = Math.min(need, pool);
+    if (pool > 0 && reserve < p.reserveTarget) {
+      const add = Math.min(p.reserveTarget - reserve, pool);
       reserve = roundMoney(reserve + add);
       pool = roundMoney(pool - add);
+      step.reserveAdded = add;
     }
 
     // 2. fund items in priority order
     for (const it of fundable) {
       if (pool <= 0) break;
-      if (completionMonth[it.id] !== undefined) continue;
+      if (completionMonth[it.id] !== undefined && funded[it.id] >= it.amount) continue;
       const need = it.amount - funded[it.id];
       if (need <= 0) {
-        completionMonth[it.id] = month;
+        if (completionMonth[it.id] === undefined) completionMonth[it.id] = month;
         continue;
       }
       const add = Math.min(need, pool);
       funded[it.id] = roundMoney(funded[it.id] + add);
       pool = roundMoney(pool - add);
-      if (funded[it.id] >= it.amount) completionMonth[it.id] = month;
+      step.items.push({ id: it.id, title: it.title, amount: add });
+      if (funded[it.id] >= it.amount && completionMonth[it.id] === undefined) {
+        completionMonth[it.id] = month;
+      }
     }
-
-    if (fundable.every((i) => completionMonth[i.id] !== undefined)) break;
+    steps.push(step);
   }
 
+  return { steps, completionMonth };
+}
+
+export function projectFunding(p: Profile, items: Item[], opts: ProjectOpts): ProjectionResult {
+  const horizon = opts.horizon ?? 120;
+  const { completionMonth } = runAllocation(p, items, {
+    months: horizon,
+    startReserve: opts.startReserve,
+  });
   return { completionMonth };
 }
 
@@ -234,9 +261,9 @@ export interface AllocationOpts {
 }
 
 /**
- * Month-by-month allocation of monthly surplus over a horizon, recording how much
- * each month went to reserve refill and to each fundable item (priority/rank order).
- * Reuses the same allocation rule as projectFunding. Pure.
+ * Per-month allocation of monthly surplus over a horizon, labeling each month and
+ * recording how much went to reserve refill and to each fundable item. Thin wrapper
+ * over `runAllocation` (the shared rule), so it can't drift from `projectFunding`. Pure.
  */
 export function projectMonthlyAllocation(
   p: Profile,
@@ -244,40 +271,15 @@ export function projectMonthlyAllocation(
   opts: AllocationOpts,
 ): MonthlyAllocation[] {
   const months = opts.months ?? 12;
-  const surplus = Math.max(0, monthlySurplus(p));
-  let reserve = opts.startReserve ?? p.reserveCurrent;
-
-  const fundable = sortQueue(items).filter((i) => i.status !== 'COMPLETED' && !i.purchased);
-  const funded: Record<string, number> = {};
-  fundable.forEach((i) => (funded[i.id] = i.fundedAmount));
-
-  const out: MonthlyAllocation[] = [];
+  const { steps } = runAllocation(p, items, { months, startReserve: opts.startReserve });
   const from = new Date(opts.fromIso);
-  for (let m = 0; m < months; m++) {
-    const label = new Date(
-      Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + m, 1),
-    ).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-    const entry: MonthlyAllocation = { month: label, reserve: 0, items: [] };
-    let pool = surplus;
-
-    if (pool > 0 && reserve < p.reserveTarget) {
-      const add = Math.min(p.reserveTarget - reserve, pool);
-      reserve = roundMoney(reserve + add);
-      pool = roundMoney(pool - add);
-      entry.reserve = roundMoney(add);
-    }
-    for (const it of fundable) {
-      if (pool <= 0) break;
-      const need = it.amount - funded[it.id];
-      if (need <= 0) continue;
-      const add = Math.min(need, pool);
-      funded[it.id] = roundMoney(funded[it.id] + add);
-      pool = roundMoney(pool - add);
-      entry.items.push({ id: it.id, title: it.title, amount: roundMoney(add) });
-    }
-    out.push(entry);
-  }
-  return out;
+  return steps.map((step, i) => ({
+    month: new Date(
+      Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + i, 1),
+    ).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+    reserve: step.reserveAdded,
+    items: step.items,
+  }));
 }
 
 export function isDone(item: Item): boolean {
