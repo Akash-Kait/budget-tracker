@@ -14,13 +14,15 @@ const links = [
 
 export function Nav() {
   return (
-    <nav className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-white px-6 py-3">
-      <span className="mr-4 font-bold text-gray-900">₹ Priority Planner</span>
+    <nav className="flex flex-wrap items-center gap-1 border-b border-hairline bg-surface/60 px-6 py-3 backdrop-blur">
+      <span className="mr-4 font-semibold tracking-tight text-text">
+        <span className="text-accent">₹</span> Priority Planner
+      </span>
       {links.map((l) => (
         <Link
           key={l.href}
           href={l.href}
-          className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          className="rounded-md px-3 py-1.5 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-text"
         >
           {l.label}
         </Link>

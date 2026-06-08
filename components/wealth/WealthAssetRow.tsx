@@ -19,48 +19,49 @@ export function WealthAssetRow({ asset }: { asset: WealthAsset }) {
 
   if (editing) {
     return (
-      <div className="border-b border-gray-100 py-3 last:border-0">
+      <div className="border-b border-hairline py-4 last:border-0">
         <WealthAssetForm initial={asset} onDone={() => setEditing(false)} />
-        <button
-          onClick={() => setEditing(false)}
-          className="mt-2 text-xs text-gray-500 hover:underline"
-        >
-          Cancel
-        </button>
       </div>
     );
   }
 
-  const breakdown =
+  const holding =
     asset.quantity != null && asset.pricePerUnit != null
       ? `${asset.quantity} × ₹${asset.pricePerUnit.toLocaleString('en-IN')}`
-      : 'manual value';
+      : 'Manual value';
 
   return (
-    <div className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0">
-      <div>
-        <p className="font-medium">
-          {asset.name}
-          {asset.ticker ? <span className="ml-2 text-xs text-gray-400">{asset.ticker}</span> : null}
-        </p>
-        <p className="text-xs text-gray-500">{breakdown}</p>
-        {asset.priceUpdatedAt && (
-          <p className="text-xs text-gray-400">
-            {asset.priceSource === 'API' ? 'Live' : 'Manual'} price · as of{' '}
-            {formatMonth(asset.priceUpdatedAt)}
-          </p>
+    <div className="grid grid-cols-2 items-center gap-x-3 gap-y-1 border-b border-hairline py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_150px_150px_110px] sm:gap-y-0">
+      {/* Asset */}
+      <div className="col-span-2 sm:col-span-1">
+        <span className="font-medium text-text">{asset.name}</span>
+        {asset.ticker && (
+          <span className="ml-2 rounded border border-hairline px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted">
+            {asset.ticker}
+          </span>
         )}
       </div>
-      <div className="flex items-center gap-4">
-        <span className="font-medium">
+      {/* Holding */}
+      <span className="font-mono text-xs tabular-nums text-muted">{holding}</span>
+      {/* Price as-of */}
+      <span className="text-xs text-faint">
+        {asset.priceUpdatedAt
+          ? `${asset.priceSource === 'API' ? 'Live' : 'Manual'} · ${formatMonth(asset.priceUpdatedAt)}`
+          : ''}
+      </span>
+      {/* Value + actions */}
+      <div className="col-span-2 flex items-center justify-between sm:col-span-1 sm:justify-end sm:gap-4">
+        <span className="font-mono text-sm font-medium tabular-nums text-text">
           <Money amount={assetValue(asset)} />
         </span>
-        <button onClick={() => setEditing(true)} className="text-xs text-blue-600 hover:underline">
-          Edit
-        </button>
-        <button onClick={del} className="text-xs text-red-500 hover:underline">
-          Delete
-        </button>
+        <span className="flex gap-3">
+          <button onClick={() => setEditing(true)} className="text-xs text-muted transition-colors hover:text-accent">
+            Edit
+          </button>
+          <button onClick={del} className="text-xs text-muted transition-colors hover:text-negative">
+            Delete
+          </button>
+        </span>
       </div>
     </div>
   );

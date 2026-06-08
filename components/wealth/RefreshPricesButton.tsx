@@ -19,7 +19,7 @@ export function RefreshPricesButton() {
     const data = await res.json();
     setMsg(
       data.provider === 'manual'
-        ? 'Manual mode — connect a market-data provider to fetch live prices.'
+        ? 'Manual mode — connect a market-data provider for live prices.'
         : `Updated ${data.updated} of ${data.checked} tickers.`,
     );
     router.refresh();
@@ -27,14 +27,17 @@ export function RefreshPricesButton() {
 
   return (
     <div className="flex items-center gap-3">
+      {msg && <span className="hidden text-xs text-faint sm:inline">{msg}</span>}
       <button
         onClick={refresh}
         disabled={busy}
-        className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg border border-hairline px-3 py-1.5 text-sm text-text transition-colors hover:bg-surface-2 hover:border-hairline-strong disabled:opacity-50"
       >
+        {busy && (
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-faint border-t-accent" />
+        )}
         {busy ? 'Refreshing…' : 'Refresh prices'}
       </button>
-      {msg && <span className="text-xs text-gray-500">{msg}</span>}
     </div>
   );
 }

@@ -1,58 +1,72 @@
 import { formatINR } from '@/lib/format';
-import { colorFor } from '@/lib/colors';
-import { ASSET_TYPES } from '@/lib/types';
+import { wealthTypeColor } from '@/lib/colors';
 import type { WealthAllocation } from '@/lib/wealth';
-
-const colorForType = (type: WealthAllocation['type']) => colorFor(ASSET_TYPES.indexOf(type));
 
 export function AllocationDonut({ data, total }: { data: WealthAllocation[]; total: number }) {
   if (data.length === 0 || total <= 0) {
-    return <p className="text-sm text-gray-500">No assets to allocate.</p>;
+    return (
+      <div className="flex h-44 items-center justify-center text-sm text-faint">
+        No assets to allocate.
+      </div>
+    );
   }
-  const r = 70;
+  const r = 80;
   const circ = 2 * Math.PI * r;
+  const gap = data.length > 1 ? 6 : 0; // px gap between segments for a crisp look
   let offset = 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-6">
-      <svg width="180" height="180" viewBox="0 0 180 180" className="shrink-0">
-        <circle cx="90" cy="90" r={r} fill="none" stroke="#f3f4f6" strokeWidth="22" />
+    <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:gap-10">
+      <svg width="200" height="200" viewBox="0 0 200 200" className="shrink-0">
+        <circle cx="100" cy="100" r={r} fill="none" stroke="var(--hairline)" strokeWidth="20" />
         {data.map((a) => {
-          const len = (a.pct / 100) * circ;
+          const len = Math.max(0, (a.pct / 100) * circ - gap);
           const seg = (
             <circle
               key={a.type}
-              cx="90"
-              cy="90"
+              cx="100"
+              cy="100"
               r={r}
               fill="none"
-              stroke={colorForType(a.type)}
-              strokeWidth="22"
+              stroke={wealthTypeColor(a.type)}
+              strokeWidth="20"
+              strokeLinecap="round"
               strokeDasharray={`${len} ${circ - len}`}
               strokeDashoffset={-offset}
-              transform="rotate(-90 90 90)"
+              transform="rotate(-90 100 100)"
             />
           );
-          offset += len;
+          offset += (a.pct / 100) * circ;
           return seg;
         })}
-        <text x="90" y="86" textAnchor="middle" className="fill-gray-500" fontSize="11">
-          Total
+        <text x="100" y="94" textAnchor="middle" fill="var(--faint)" fontSize="11" letterSpacing="1">
+          TOTAL
         </text>
-        <text x="90" y="104" textAnchor="middle" className="fill-gray-900" fontSize="15" fontWeight="700">
+        <text
+          x="100"
+          y="116"
+          textAnchor="middle"
+          fill="var(--text)"
+          fontSize="17"
+          fontWeight="600"
+          style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}
+        >
           {formatINR(total)}
         </text>
       </svg>
-      <ul className="space-y-2 text-sm">
+
+      <ul className="w-full max-w-xs space-y-3">
         {data.map((a) => (
-          <li key={a.type} className="flex items-center gap-2">
+          <li key={a.type} className="flex items-center gap-3">
             <span
-              className="inline-block h-3 w-3 rounded"
-              style={{ backgroundColor: colorForType(a.type) }}
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: wealthTypeColor(a.type) }}
             />
-            <span className="w-28 text-gray-700">{a.label}</span>
-            <span className="font-medium">{formatINR(a.value)}</span>
-            <span className="text-gray-400">· {a.pct}%</span>
+            <span className="flex-1 text-sm text-muted">{a.label}</span>
+            <span className="font-mono text-sm tabular-nums text-text">{formatINR(a.value)}</span>
+            <span className="w-10 text-right font-mono text-xs tabular-nums text-faint">
+              {a.pct}%
+            </span>
           </li>
         ))}
       </ul>
