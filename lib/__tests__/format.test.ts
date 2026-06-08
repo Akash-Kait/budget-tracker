@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatINR, formatMonth, daysUntil } from '@/lib/format';
+import { formatINR, formatMonth, daysUntil, daysSince } from '@/lib/format';
 
 describe('formatINR', () => {
   it('uses Indian digit grouping with ₹', () => {
@@ -24,5 +24,17 @@ describe('daysUntil', () => {
   });
   it('clamps negatives to 0', () => {
     expect(daysUntil('2026-06-01T00:00:00.000Z', '2026-06-07T00:00:00.000Z')).toBe(0);
+  });
+});
+
+describe('daysSince', () => {
+  it('counts whole days elapsed', () => {
+    expect(daysSince('2026-06-01T00:00:00.000Z', '2026-06-07T00:00:00.000Z')).toBe(6);
+  });
+  it('is 0 for same day', () => {
+    expect(daysSince('2026-06-07T00:00:00.000Z', '2026-06-07T00:00:00.000Z')).toBe(0);
+  });
+  it('clamps future dates to 0', () => {
+    expect(daysSince('2026-06-10T00:00:00.000Z', '2026-06-07T00:00:00.000Z')).toBe(0);
   });
 });

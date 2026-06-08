@@ -2,7 +2,7 @@ import { Card } from '@/components/Card';
 import { WishlistRow } from '@/components/WishlistRow';
 import { ItemForm } from '@/components/ItemForm';
 import { getItems } from '@/lib/data';
-import { daysUntil } from '@/lib/format';
+import { daysUntil, daysSince } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,11 @@ export default async function WishlistPage() {
   const withDays = items.map((i) => {
     const expiry = new Date(i.dateAdded);
     expiry.setDate(expiry.getDate() + i.coolingPeriodDays);
-    return { item: i, daysRemaining: daysUntil(expiry.toISOString(), now) };
+    return {
+      item: i,
+      daysRemaining: daysUntil(expiry.toISOString(), now),
+      daysOld: daysSince(i.dateAdded, now),
+    };
   });
 
   return (
@@ -29,8 +33,13 @@ export default async function WishlistPage() {
         {withDays.length === 0 ? (
           <p className="text-sm text-gray-500">No wishes yet.</p>
         ) : (
-          withDays.map(({ item, daysRemaining }) => (
-            <WishlistRow key={item.id} item={item} daysRemaining={daysRemaining} />
+          withDays.map(({ item, daysRemaining, daysOld }) => (
+            <WishlistRow
+              key={item.id}
+              item={item}
+              daysRemaining={daysRemaining}
+              daysOld={daysOld}
+            />
           ))
         )}
       </Card>

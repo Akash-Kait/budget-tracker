@@ -63,13 +63,17 @@ npm test            # vitest unit tests for the finance + format logic
   time** = deficit ÷ monthly surplus), Monthly Surplus (income − expenses − investments),
   the highest-priority unfunded item, and a **Total Future Liability** card summing the
   remaining funding needed across all active commitments, goals, and experiences.
-- **Priority Queue** — active items sorted by priority (highest first) then due date. Each
-  row shows funding progress, **remaining amount**, and a **projected completion date** with
-  an "on track / ⚠ behind by N months" flag. Inline **Edit**, **Complete**, **Delete**, and
-  an **Add Funding** panel with transaction history.
+- **Priority Queue** — active items sorted by priority (highest first), then manual rank,
+  then due date. Each row shows funding progress, **remaining amount**, and a **projected
+  completion date** with an "on track / ⚠ behind by N months" flag. Inline **Edit**,
+  **Complete**, **Delete**, and an **Add Funding** panel with transaction history.
+- **Ranking** — drag-and-drop the active items to set their order **within** a priority
+  level. This rank feeds the queue and the simulator's projections.
 - **Timeline** — active commitments, goals, and experiences in chronological order.
-- **Wishlist** — discretionary wants with a cooling-period guard: "Mark purchased" stays
-  disabled until `dateAdded + coolingPeriodDays` has passed.
+- **Wishlist** — discretionary wants with a cooling-period guard ("Mark purchased" stays
+  disabled until `dateAdded + coolingPeriodDays` has passed), an **"Added: N days ago"**
+  age, and a **Convert to Goal** action (turns the wish into a Goal in place, keeping its
+  funding history).
 - **History** — completed items and purchased wishlist items, kept as a record.
 - **Simulator** — enter a cost and see reserve before/after, % reduction, months to restore
   the reserve, per-goal delays, and a colour-coded **SAFE / CAUTION / WAIT** verdict.
@@ -100,3 +104,5 @@ Currency is INR (₹). Single-user, no authentication (MVP).
 - Implementation plan (MVP): `docs/superpowers/plans/2026-06-07-financial-priority-planner.md`
 - Design spec (iteration 2, P0+P1): `docs/superpowers/specs/2026-06-07-planner-iteration-2-design.md`
 - Implementation plan (iteration 2): `docs/superpowers/plans/2026-06-07-planner-iteration-2.md`
+- Design spec (iteration 3, P2): `docs/superpowers/specs/2026-06-07-planner-iteration-3-design.md`
+- Implementation plan (iteration 3): `docs/superpowers/plans/2026-06-07-planner-iteration-3.md`

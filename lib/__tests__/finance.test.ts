@@ -32,6 +32,7 @@ function item(p: Partial<Item>): Item {
     amount: 100000,
     fundedAmount: 0,
     priority: 3,
+    rank: 0,
     dueDate: null,
     status: null,
     notes: null,
@@ -223,5 +224,16 @@ describe('projectedCompletion', () => {
     const r = projectedCompletion(p, items, from);
     expect(r['g'].monthIndex).toBeNull();
     expect(r['g'].behindMonths).toBeNull();
+  });
+});
+
+describe('sortQueue rank tiebreak', () => {
+  it('orders by rank within the same priority', () => {
+    const items = [
+      item({ title: 'B', priority: 5, rank: 2, type: 'COMMITMENT', dueDate: '2026-07-01T00:00:00.000Z' }),
+      item({ title: 'A', priority: 5, rank: 1, type: 'COMMITMENT', dueDate: '2026-09-01T00:00:00.000Z' }),
+      item({ title: 'C', priority: 4, rank: 0, type: 'GOAL', dueDate: '2026-06-01T00:00:00.000Z' }),
+    ];
+    expect(sortQueue(items).map((i) => i.title)).toEqual(['A', 'B', 'C']);
   });
 });

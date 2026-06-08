@@ -22,12 +22,15 @@ export async function POST(req: NextRequest) {
   const parsed = itemSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+  const max = await prisma.planItem.aggregate({ _max: { rank: true } });
+  const nextRank = (max._max.rank ?? -1) + 1;
   const created = await prisma.planItem.create({
     data: {
       type: d.type,
       title: d.title,
       amount: d.amount,
       priority: d.priority,
+      rank: nextRank,
       dueDate: d.dueDate ? new Date(d.dueDate) : null,
       status: d.status ?? null,
       notes: d.notes ?? null,

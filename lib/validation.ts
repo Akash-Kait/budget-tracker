@@ -31,6 +31,16 @@ export const fundingSchema = z.object({
   note: z.string().optional(),
 });
 
+export const reorderSchema = z.object({
+  ids: z.array(z.string()).min(1),
+});
+
+export const convertSchema = z.object({
+  amount: z.number().min(0),
+  dueDate: z.string().datetime(),
+  priority: z.number().int().min(1).max(5),
+});
+
 export const simulateSchema = z.object({
   name: z.string().optional(),
   cost: z.number().positive(),

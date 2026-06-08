@@ -16,3 +16,8 @@ export function daysUntil(targetIso: string, fromIso: string): number {
   const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
   return Math.max(0, days);
 }
+
+export function daysSince(iso: string, fromIso: string): number {
+  const ms = new Date(fromIso).getTime() - new Date(iso).getTime();
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}

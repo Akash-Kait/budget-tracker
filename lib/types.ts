@@ -20,6 +20,7 @@ export interface Item {
   amount: number;
   fundedAmount: number;
   priority: number;
+  rank: number;
   dueDate: string | null; // ISO
   status: Status | null;
   notes: string | null;

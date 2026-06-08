@@ -44,13 +44,15 @@ async function main() {
     create: { id: 1, ...profile },
   });
 
-  for (const it of items) {
+  for (let idx = 0; idx < items.length; idx++) {
+    const it = items[idx];
     await prisma.planItem.create({
       data: {
         type: it.type,
         title: it.title,
         amount: it.amount,
         priority: it.priority,
+        rank: idx,
         dueDate: it.dueDate ?? null,
         status: it.status ?? null,
         notes: it.notes ?? null,

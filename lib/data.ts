@@ -25,6 +25,7 @@ export async function getItems(): Promise<Item[]> {
     amount: r.amount,
     fundedAmount: r.fundings.reduce((s, f) => s + f.amount, 0),
     priority: r.priority,
+    rank: r.rank,
     dueDate: r.dueDate ? r.dueDate.toISOString() : null,
     status: r.status as Item['status'],
     notes: r.notes,

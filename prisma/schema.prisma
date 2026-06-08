@@ -30,6 +30,7 @@ model PlanItem {
   coolingPeriodDays Int                  @default(30)
   dateAdded         DateTime             @default(now())
   purchased         Boolean              @default(false)
+  rank              Int                  @default(0)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   fundings          FundingTransaction[]

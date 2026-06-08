@@ -2,9 +2,18 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Money } from '@/components/Money';
+import { ConvertForm } from '@/components/ConvertForm';
 import type { Item } from '@/lib/types';
 
-export function WishlistRow({ item, daysRemaining }: { item: Item; daysRemaining: number }) {
+export function WishlistRow({
+  item,
+  daysRemaining,
+  daysOld,
+}: {
+  item: Item;
+  daysRemaining: number;
+  daysOld: number;
+}) {
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
   const locked = daysRemaining > 0 && !item.purchased;
@@ -37,12 +46,16 @@ export function WishlistRow({ item, daysRemaining }: { item: Item; daysRemaining
           <Money amount={item.amount} /> · P{item.priority}
           {item.notes ? ` · ${item.notes}` : ''}
         </p>
+        <p className="text-xs text-gray-400">
+          Added: {daysOld} day{daysOld === 1 ? '' : 's'} ago
+        </p>
         {locked && (
           <p className="text-xs text-amber-600">
             Cooling period: {daysRemaining} day{daysRemaining > 1 ? 's' : ''} remaining
           </p>
         )}
         {msg && <p className="text-xs text-red-600">{msg}</p>}
+        {!item.purchased && <ConvertForm itemId={item.id} defaultAmount={item.amount} />}
       </div>
       <div className="flex items-center gap-3">
         {!item.purchased && (

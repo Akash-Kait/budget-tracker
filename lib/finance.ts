@@ -20,6 +20,7 @@ export function sortQueue(items: Item[]): Item[] {
     .slice()
     .sort((a, b) => {
       if (b.priority !== a.priority) return b.priority - a.priority;
+      if (a.rank !== b.rank) return a.rank - b.rank;
       const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
       const bd = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
       if (ad !== bd) return ad - bd;
