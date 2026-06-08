@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Money } from '@/components/Money';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { assetValue } from '@/lib/wealth';
+import { formatMonth } from '@/lib/format';
 import type { WealthAsset } from '@/lib/types';
 
 export function WealthAssetRow({ asset }: { asset: WealthAsset }) {
@@ -43,6 +44,12 @@ export function WealthAssetRow({ asset }: { asset: WealthAsset }) {
           {asset.ticker ? <span className="ml-2 text-xs text-gray-400">{asset.ticker}</span> : null}
         </p>
         <p className="text-xs text-gray-500">{breakdown}</p>
+        {asset.priceUpdatedAt && (
+          <p className="text-xs text-gray-400">
+            {asset.priceSource === 'API' ? 'Live' : 'Manual'} price · as of{' '}
+            {formatMonth(asset.priceUpdatedAt)}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-4">
         <span className="font-medium">

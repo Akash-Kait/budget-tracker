@@ -3,6 +3,7 @@ import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
 import { WealthKpiCards } from '@/components/wealth/WealthKpiCards';
 import { AllocationDonut } from '@/components/wealth/AllocationDonut';
+import { RefreshPricesButton } from '@/components/wealth/RefreshPricesButton';
 import { getWealthAssets } from '@/lib/data';
 import { groupByType, totalWealth, allocationByType } from '@/lib/wealth';
 
@@ -16,7 +17,10 @@ export default async function WealthPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Wealth</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold">Wealth</h1>
+        <RefreshPricesButton />
+      </div>
       <p className="text-sm text-gray-500">
         Investment assets, entered manually for now. These are tracked separately and never affect
         your planning reserve, projections, or the purchase simulator.

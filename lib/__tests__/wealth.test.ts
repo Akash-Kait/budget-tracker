@@ -11,6 +11,9 @@ function asset(p: Partial<WealthAsset>): WealthAsset {
     quantity: null,
     pricePerUnit: null,
     value: null,
+    lastPrice: null,
+    priceUpdatedAt: null,
+    priceSource: null,
     ...p,
   };
 }

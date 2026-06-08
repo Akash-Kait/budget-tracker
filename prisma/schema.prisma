@@ -18,15 +18,18 @@ model FinancialProfile {
 }
 
 model WealthAsset {
-  id           String   @id @default(cuid())
-  name         String
-  type         String // MUTUAL_FUND | STOCK | OTHER
-  ticker       String?
-  quantity     Float?
-  pricePerUnit Float?
-  value        Float? // manual fallback when units/price don't apply
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(cuid())
+  name           String
+  type           String // MUTUAL_FUND | STOCK | OTHER
+  ticker         String?
+  quantity       Float?
+  pricePerUnit   Float?
+  value          Float? // manual fallback when units/price don't apply
+  lastPrice      Float? // last fetched/entered unit price (market-data headroom)
+  priceUpdatedAt DateTime? // when pricePerUnit was last set
+  priceSource    String? // MANUAL | API
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model PlanItem {

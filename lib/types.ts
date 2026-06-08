@@ -21,6 +21,9 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   OTHER: 'Other',
 };
 
+export const PRICE_SOURCES = ['MANUAL', 'API'] as const;
+export type PriceSource = (typeof PRICE_SOURCES)[number];
+
 export interface WealthAsset {
   id: string;
   name: string;
@@ -29,6 +32,9 @@ export interface WealthAsset {
   quantity: number | null;
   pricePerUnit: number | null;
   value: number | null; // manual fallback
+  lastPrice: number | null;
+  priceUpdatedAt: string | null; // ISO
+  priceSource: PriceSource | null;
 }
 
 export interface Item {

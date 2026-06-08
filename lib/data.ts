@@ -23,6 +23,9 @@ export async function getWealthAssets(): Promise<WealthAsset[]> {
     quantity: r.quantity,
     pricePerUnit: r.pricePerUnit,
     value: r.value,
+    lastPrice: r.lastPrice,
+    priceUpdatedAt: r.priceUpdatedAt ? r.priceUpdatedAt.toISOString() : null,
+    priceSource: r.priceSource as WealthAsset['priceSource'],
   }));
 }
 
