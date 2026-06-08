@@ -6,6 +6,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { ItemForm } from '@/components/ItemForm';
 import { FundingPanel } from '@/components/FundingPanel';
 import { formatMonth } from '@/lib/format';
+import { fundingProgress } from '@/lib/finance';
 import type { Item } from '@/lib/types';
 
 const badge: Record<string, string> = {
@@ -25,7 +26,7 @@ interface Props {
 export function EditableItemRow({ item, remaining, projectedIso, behindMonths }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const pct = item.amount > 0 ? Math.round((item.fundedAmount / item.amount) * 100) : 0;
+  const { pct, overFundedBy } = fundingProgress(item);
 
   async function complete() {
     await fetch(`/api/items/${item.id}/complete`, { method: 'POST' });
@@ -67,8 +68,16 @@ export function EditableItemRow({ item, remaining, projectedIso, behindMonths }:
         <div className="flex-1">
           <ProgressBar pct={pct} />
           <p className="mt-1 text-xs text-gray-500">
-            <Money amount={item.fundedAmount} /> / <Money amount={item.amount} /> · Remaining{' '}
-            <Money amount={remaining} />
+            <Money amount={item.fundedAmount} /> / <Money amount={item.amount} /> ·{' '}
+            {overFundedBy > 0 ? (
+              <span className="text-amber-600">
+                over-funded by <Money amount={overFundedBy} />
+              </span>
+            ) : (
+              <>
+                Remaining <Money amount={remaining} />
+              </>
+            )}
           </p>
           <p className="text-xs text-gray-500">
             {projectedIso ? (

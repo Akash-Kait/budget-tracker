@@ -8,9 +8,19 @@ export function reserveDeficit(p: Profile): number {
   return Math.max(0, p.reserveTarget - p.reserveCurrent);
 }
 
-export function fundingProgress(item: Item): { funded: number; target: number; pct: number } {
-  const pct = item.amount > 0 ? Math.round((item.fundedAmount / item.amount) * 100) : 0;
-  return { funded: item.fundedAmount, target: item.amount, pct };
+export function fundingProgress(item: Item): {
+  funded: number;
+  target: number;
+  pct: number; // clamped to 0–100 for display
+  overFundedBy: number; // amount funded beyond the target (0 when not over-funded)
+} {
+  const raw = item.amount > 0 ? Math.round((item.fundedAmount / item.amount) * 100) : 0;
+  return {
+    funded: item.fundedAmount,
+    target: item.amount,
+    pct: Math.min(100, raw),
+    overFundedBy: Math.max(0, roundMoney(item.fundedAmount - item.amount)),
+  };
 }
 
 /** Queue: non-wishlist items, priority desc, then dueDate asc (nulls last), then title. */

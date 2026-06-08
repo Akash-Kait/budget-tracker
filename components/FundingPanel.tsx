@@ -69,14 +69,23 @@ export function FundingPanel({ itemId }: { itemId: string }) {
             </button>
           </form>
           {history && history.length > 0 && (
-            <ul className="mt-2 space-y-1 text-xs text-gray-600">
-              {history.map((t) => (
-                <li key={t.id}>
-                  {formatMonth(t.date)} +{formatINR(t.amount)}
-                  {t.note ? ` — ${t.note}` : ''}
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="mt-2 text-xs font-medium text-gray-700">
+                Funding history — {formatINR(history.reduce((s, t) => s + t.amount, 0))} across{' '}
+                {history.length} transaction{history.length > 1 ? 's' : ''}
+              </p>
+              <ul className="mt-1 space-y-1 text-xs text-gray-600">
+                {history.map((t) => (
+                  <li key={t.id}>
+                    {formatMonth(t.date)} +{formatINR(t.amount)}
+                    {t.note ? ` — ${t.note}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {history && history.length === 0 && (
+            <p className="mt-2 text-xs text-gray-400">No funding yet.</p>
           )}
         </div>
       )}

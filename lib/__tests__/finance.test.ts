@@ -65,10 +65,16 @@ describe('fundingProgress', () => {
       funded: 60000,
       target: 100000,
       pct: 60,
+      overFundedBy: 0,
     });
   });
   it('returns 0 pct when target is 0', () => {
     expect(fundingProgress(item({ amount: 0, fundedAmount: 0 })).pct).toBe(0);
+  });
+  it('clamps pct to 100 and reports overFundedBy when over-funded', () => {
+    const p = fundingProgress(item({ amount: 100000, fundedAmount: 130000 }));
+    expect(p.pct).toBe(100);
+    expect(p.overFundedBy).toBe(30000);
   });
 });
 
