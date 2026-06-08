@@ -1,14 +1,27 @@
 import { z } from 'zod';
-import { ITEM_TYPES, STATUSES } from '@/lib/types';
+import { ITEM_TYPES, STATUSES, ASSET_TYPES } from '@/lib/types';
 
 export const profileSchema = z.object({
-  protectedCapital: z.number().min(0),
   reserveTarget: z.number().min(0),
   reserveCurrent: z.number().min(0),
   monthlyIncome: z.number().min(0),
   monthlyExpenses: z.number().min(0),
   monthlyInvestments: z.number().min(0),
 });
+
+export const wealthAssetSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    type: z.enum(ASSET_TYPES),
+    ticker: z.string().max(20).nullable().optional(),
+    quantity: z.number().min(0).nullable().optional(),
+    pricePerUnit: z.number().min(0).nullable().optional(),
+    value: z.number().min(0).nullable().optional(),
+  })
+  .refine((d) => (d.quantity != null && d.pricePerUnit != null) || d.value != null, {
+    message: 'Provide either quantity + price, or a manual value',
+    path: ['value'],
+  });
 
 export const itemSchema = z
   .object({

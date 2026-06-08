@@ -115,7 +115,20 @@ npm test            # vitest unit tests for the finance + format logic
 - **History** — completed items and purchased wishlist items, kept as a record.
 - **Simulator** — enter a cost and see reserve before/after, % reduction, months to restore
   the reserve, per-goal delays, and a colour-coded **SAFE / CAUTION / WAIT** verdict.
+- **Wealth** — a *separate* module for investment assets (mutual funds, stocks, other),
+  entered manually with name, optional ticker, quantity, price-per-unit, or a manual value
+  (`value = qty × price` when both are given). Assets are grouped by type with subtotals and a
+  total. The dashboard shows a passive **Total Wealth** link. Wealth is fully independent of
+  Planning — it never affects the reserve, projections, recovery, or the simulator.
 - **Settings** — edit the financial profile (reserves, monthly figures).
+
+## Planning vs Wealth
+
+The app has two independent modules. **Planning** is cash-based (reserve, monthly
+income/expenses/investments, derived surplus, and all items + the projection/simulator) and
+lives in `lib/finance.ts`. **Wealth** is investment-based (manually-entered assets) and lives
+in `lib/wealth.ts`. The two never share calculations — Wealth values are display-only and the
+planning engine ignores them entirely.
 
 ## Funding model
 

@@ -1,17 +1,29 @@
 import { prisma } from '@/lib/db';
 import { roundMoney } from '@/lib/finance';
-import type { Item, Profile } from '@/lib/types';
+import type { Item, Profile, WealthAsset } from '@/lib/types';
 
 export async function getProfile(): Promise<Profile> {
   const r = await prisma.financialProfile.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
   return {
-    protectedCapital: r.protectedCapital,
     reserveTarget: r.reserveTarget,
     reserveCurrent: r.reserveCurrent,
     monthlyIncome: r.monthlyIncome,
     monthlyExpenses: r.monthlyExpenses,
     monthlyInvestments: r.monthlyInvestments,
   };
+}
+
+export async function getWealthAssets(): Promise<WealthAsset[]> {
+  const rows = await prisma.wealthAsset.findMany({ orderBy: { createdAt: 'desc' } });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type as WealthAsset['type'],
+    ticker: r.ticker,
+    quantity: r.quantity,
+    pricePerUnit: r.pricePerUnit,
+    value: r.value,
+  }));
 }
 
 export async function getItems(): Promise<Item[]> {

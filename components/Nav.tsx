@@ -7,6 +7,7 @@ const links = [
   { href: '/timeline', label: 'Timeline' },
   { href: '/wishlist', label: 'Wishlist' },
   { href: '/history', label: 'History' },
+  { href: '/wealth', label: 'Wealth' },
   { href: '/simulator', label: 'Simulator' },
   { href: '/settings', label: 'Settings' },
 ];

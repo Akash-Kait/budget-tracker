@@ -1,9 +1,14 @@
 import { Dashboard } from '@/components/dashboard/Dashboard';
-import { getProfile, getItems } from '@/lib/data';
+import { getProfile, getItems, getWealthAssets } from '@/lib/data';
+import { totalWealth } from '@/lib/wealth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
-  const [profile, items] = await Promise.all([getProfile(), getItems()]);
-  return <Dashboard profile={profile} items={items} />;
+  const [profile, items, assets] = await Promise.all([
+    getProfile(),
+    getItems(),
+    getWealthAssets(),
+  ]);
+  return <Dashboard profile={profile} items={items} totalWealth={totalWealth(assets)} />;
 }

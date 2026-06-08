@@ -9,13 +9,24 @@ datasource db {
 
 model FinancialProfile {
   id                 Int      @id @default(1)
-  protectedCapital   Float    @default(0)
   reserveTarget      Float    @default(0)
   reserveCurrent     Float    @default(0)
   monthlyIncome      Float    @default(0)
   monthlyExpenses    Float    @default(0)
   monthlyInvestments Float    @default(0)
   updatedAt          DateTime @updatedAt
+}
+
+model WealthAsset {
+  id           String   @id @default(cuid())
+  name         String
+  type         String // MUTUAL_FUND | STOCK | OTHER
+  ticker       String?
+  quantity     Float?
+  pricePerUnit Float?
+  value        Float? // manual fallback when units/price don't apply
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model PlanItem {

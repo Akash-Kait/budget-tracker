@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import type { Profile } from '@/lib/types';
 
 const fields: { key: keyof Profile; label: string }[] = [
-  { key: 'protectedCapital', label: 'Protected Capital' },
   { key: 'reserveTarget', label: 'Reserve Target' },
   { key: 'reserveCurrent', label: 'Reserve Current' },
   { key: 'monthlyIncome', label: 'Monthly Income' },

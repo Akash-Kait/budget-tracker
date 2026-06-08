@@ -1,6 +1,8 @@
 'use client';
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/Card';
+import { Money } from '@/components/Money';
 import { KpiCards } from '@/components/dashboard/KpiCards';
 import { WhatIfBar } from '@/components/dashboard/WhatIfBar';
 import { ReserveGauge } from '@/components/dashboard/ReserveGauge';
@@ -21,7 +23,15 @@ import {
 } from '@/lib/finance';
 import type { Item, Profile } from '@/lib/types';
 
-export function Dashboard({ profile, items }: { profile: Profile; items: Item[] }) {
+export function Dashboard({
+  profile,
+  items,
+  totalWealth,
+}: {
+  profile: Profile;
+  items: Item[];
+  totalWealth: number;
+}) {
   const [name, setName] = useState('');
   const [cost, setCost] = useState('');
   const costNum = Number(cost) || 0;
@@ -61,6 +71,17 @@ export function Dashboard({ profile, items }: { profile: Profile; items: Item[] 
         monthsToFund={m2f}
         surplus={surplus}
       />
+      <Link
+        href="/wealth"
+        className="flex items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white px-5 py-3 text-sm hover:border-gray-400"
+      >
+        <span className="text-gray-500">
+          Total Wealth <span className="text-gray-400">(tracked separately — not part of planning)</span>
+        </span>
+        <span className="font-bold text-gray-900">
+          <Money amount={totalWealth} /> →
+        </span>
+      </Link>
       <WhatIfBar
         name={name}
         cost={cost}

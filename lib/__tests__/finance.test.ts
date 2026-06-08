@@ -18,7 +18,6 @@ import {
 import type { Item, Profile } from '@/lib/types';
 
 const profile: Profile = {
-  protectedCapital: 200000,
   reserveTarget: 500000,
   reserveCurrent: 420000,
   monthlyIncome: 150000,
