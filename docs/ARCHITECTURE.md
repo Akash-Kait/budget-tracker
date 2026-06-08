@@ -1,147 +1,197 @@
-# Budget Tracker — Repository Analysis
+# Budget Tracker — Architecture & Current State
 
-> Snapshot as of 2026-06-08 (after iteration 5: Planning/Wealth split). A point-in-time
-> architecture overview + recommendations. See `docs/superpowers/` for per-iteration specs/plans
-> and `REVIEW.md` for the standing code-review findings.
+> **Reading this fresh (e.g. pasted into a new chat)?** This is a self-contained snapshot of a
+> working app so you can recommend next steps without seeing the code. It states what exists, what's
+> already done, and what's open. Snapshot date: **2026-06-08**.
 
-**Personal Financial Priority Planner** — a single-user Next.js 16 (App Router) + TypeScript +
-Tailwind 4 app over Prisma 6 / SQLite. Two independent domains: **Planning** (cash-based) and
-**Wealth** (investment-based). No auth (single-user MVP).
+## What this app is
+
+A **single-user Personal Financial Priority Planner**: it answers *"given my reserves, priorities,
+and future obligations, should I spend money on this today?"* It is **not** a budgeting / expense
+tracker. Two **independent** domains:
+
+- **Planning** (cash-based) — Opportunity Reserve, monthly income/expenses/investments, a queue of
+  future claims (commitments, goals, experiences, wishlist), funding progress, a month-by-month
+  projection engine, and a purchase-impact simulator.
+- **Wealth** (investment-based) — manually-entered holdings (mutual funds, stocks, other) with a
+  visual dashboard. **Hard rule: Wealth never feeds any Planning calculation** (and vice-versa).
+
+**Stack:** Next.js **16.2.7** (App Router), React **19.2.4**, TypeScript, Tailwind 4, Prisma **6** /
+SQLite, Zod, Vitest. Currency **INR (₹)**. No auth (single-user MVP). Zero charting deps — all
+visuals are Tailwind + inline SVG. **56 unit tests** pass (finance / format / wealth / market).
 
 ## 1. Project structure
 
 ```
-budget-tracker/
-├── app/
-│   ├── page.tsx                 Planning dashboard (server → client <Dashboard>)
-│   ├── layout.tsx, globals.css
-│   ├── queue/ ranking/ timeline/ wishlist/ history/ simulator/ settings/ wealth/  (page.tsx each)
-│   └── api/
-│       ├── profile/route.ts                     GET/PUT financial profile
-│       ├── simulate/route.ts                    POST purchase simulation
-│       ├── items/route.ts                        GET/POST plan items
-│       ├── items/[id]/route.ts                   GET/PUT/DELETE
-│       ├── items/[id]/{funding,complete,restore,convert,purchase}/route.ts
-│       ├── items/reorder/route.ts                POST rank reorder
-│       └── wealth/route.ts , wealth/[id]/route.ts  Wealth asset CRUD
-├── components/
-│   ├── dashboard/   Dashboard, KpiCards, WhatIfBar, ReserveGauge, FundingBars,
-│   │                LiabilityTreemap, GoalTimeline, SurplusProjection   (Planning visuals)
-│   ├── wealth/      WealthAssetForm, WealthAssetRow
-│   └── (shared)     ItemForm, EditableItemRow, FundingPanel, WishlistRow, ConvertForm,
-│                    RankingList, ProfileForm, Nav, Card, Money, ProgressBar, RecommendationBanner
-├── lib/
-│   ├── finance.ts     Planning engine (pure)
-│   ├── wealth.ts      Wealth engine (pure, independent of finance.ts)
-│   ├── data.ts        Prisma read layer → plain DTOs
-│   ├── validation.ts  Zod schemas
-│   ├── handler.ts     withErrorHandling API wrapper
-│   ├── types.ts       shared types/enums
-│   ├── format.ts      ₹ INR + date helpers     colors.ts     db.ts (Prisma singleton)
-│   └── __tests__/     finance / format / wealth  (48 Vitest tests)
-└── prisma/  schema.prisma, seed.ts
+app/
+  page.tsx                      Planning dashboard (server → client <Dashboard>)
+  layout.tsx, globals.css
+  queue/ ranking/ timeline/ wishlist/ history/ simulator/ settings/ wealth/   (page.tsx each)
+  api/
+    profile/route.ts                          GET/PUT financial profile
+    simulate/route.ts                          POST purchase simulation
+    items/route.ts                              GET/POST
+    items/[id]/route.ts                         GET/PUT/DELETE
+    items/[id]/{funding,complete,restore,convert,purchase}/route.ts
+    items/reorder/route.ts                      POST rank reorder
+    wealth/route.ts , wealth/[id]/route.ts      Wealth CRUD
+    wealth/refresh-prices/route.ts              POST batch price refresh (provider-backed)
+components/
+  dashboard/   Dashboard, KpiCards, WhatIfBar, ReserveGauge, FundingBars,
+               LiabilityTreemap, GoalTimeline, SurplusProjection         (Planning visuals)
+  wealth/      WealthAssetForm, WealthAssetRow, WealthKpiCards, AllocationDonut, RefreshPricesButton
+  (shared)     ItemForm, EditableItemRow, FundingPanel, WishlistRow, ConvertForm, RankingList,
+               ProfileForm, Nav, Card, Money, ProgressBar, RecommendationBanner
+lib/
+  finance.ts   Planning engine (pure; no DB/React imports)
+  wealth.ts    Wealth engine (pure; never imports finance.ts)
+  market/provider.ts   Price-provider interface + manual default (market-data boundary)
+  data.ts      Prisma read layer → plain DTOs
+  validation.ts (Zod)   handler.ts (withErrorHandling)   types.ts   format.ts   colors.ts   db.ts
+  __tests__/   finance / format / wealth / market
+prisma/  schema.prisma, seed.ts
+docs/  ARCHITECTURE.md (this file), superpowers/specs+plans (per-iteration), REVIEW.md
 ```
 
-**Layering:** pure domain (`finance.ts`, `wealth.ts`) → read layer (`data.ts`) → thin API route
-handlers (Zod + `withErrorHandling`) → server pages → client components. Pure logic imports no
-DB/React, so the client what-if runs the same functions as the server.
+**Layering:** pure domain (`finance.ts`, `wealth.ts`, `market/`) → read layer (`data.ts`) → thin
+Zod-validated, error-wrapped API route handlers → server pages → client components. Because the pure
+layer has no DB/React deps, the client what-if runs the *same* functions as the server.
 
-## 2. Prisma schema
+## 2. Prisma schema (SQLite)
 
-| Model | Purpose | Key fields |
-|-------|---------|-----------|
-| **FinancialProfile** (singleton `id=1`) | Planning cash state | `reserveTarget`, `reserveCurrent`, `monthlyIncome`, `monthlyExpenses`, `monthlyInvestments` |
-| **PlanItem** | Unified commitment/goal/experience/wishlist | `type`, `title`, `amount`, `priority` (1–5), `rank`, `dueDate?`, `status?`, `notes?`, `coolingPeriodDays`, `dateAdded`, `purchased`, `fundings[]` |
-| **FundingTransaction** | Append-only funding ledger | `itemId` (→PlanItem, `onDelete: Cascade`, indexed), `amount`, `note?`, `date` |
-| **WealthAsset** | Investment holdings | `name`, `type`, `ticker?`, `quantity?`, `pricePerUnit?`, `value?` (manual fallback) |
+```prisma
+model FinancialProfile {           // singleton id=1 — Planning cash state
+  id Int @id @default(1)
+  reserveTarget Float; reserveCurrent Float
+  monthlyIncome Float; monthlyExpenses Float; monthlyInvestments Float
+  updatedAt DateTime @updatedAt
+}
 
-SQLite has no enums — `type`/`status` are validated strings. **`fundedAmount` is not stored** —
-derived as `SUM(fundings.amount)` in the read layer. Money is `Float`, rounded to paise via
-`roundMoney`.
+model PlanItem {                   // unified commitment/goal/experience/wishlist
+  id String @id @default(cuid())
+  type String                      // COMMITMENT | GOAL | EXPERIENCE | WISHLIST
+  title String; amount Float; priority Int (1–5); rank Int
+  dueDate DateTime?; status String?  // PLANNED | FUNDED | COMPLETED
+  notes String?; coolingPeriodDays Int; dateAdded DateTime; purchased Boolean
+  fundings FundingTransaction[]
+}
 
-## 3. Main domain models (`lib/types.ts`)
+model FundingTransaction {         // append-only funding ledger
+  id String @id; itemId String (→PlanItem, onDelete Cascade, @@index)
+  amount Float; note String?; date DateTime
+}
 
-- **`Profile`** — the 5 planning cash fields (Protected Capital removed in iteration 5).
-- **`Item`** — PlanItem DTO with derived `fundedAmount`, ISO-string dates; `ItemType =
-  COMMITMENT|GOAL|EXPERIENCE|WISHLIST`, `Status = PLANNED|FUNDED|COMPLETED`.
-- **`WealthAsset`** — `AssetType = MUTUAL_FUND|STOCK|OTHER` + `ASSET_TYPE_LABELS`; nullable
-  `ticker/quantity/pricePerUnit/value`.
-- **`Recommendation = SAFE|CAUTION|WAIT`** — simulator verdict.
+model WealthAsset {                // investment holding (Wealth only)
+  id String @id @default(cuid())
+  name String; type String         // MUTUAL_FUND | STOCK | OTHER
+  ticker String?; quantity Float?; pricePerUnit Float?; value Float?  // value = qty×price else manual
+  lastPrice Float?; priceUpdatedAt DateTime?; priceSource String?      // MANUAL | API (market-data headroom)
+  createdAt; updatedAt
+}
+```
+
+Notes: SQLite has no enums — `type`/`status`/`priceSource` are validated strings. **`fundedAmount` is
+not stored** — derived as `SUM(fundings.amount)`. Money is `Float`, rounded to paise via `roundMoney`.
+
+## 3. Domain models (`lib/types.ts`)
+
+- **`Profile`** — 5 planning cash fields (Protected Capital was removed).
+- **`Item`** — PlanItem DTO with derived `fundedAmount`, ISO-string dates.
+- **`WealthAsset`** — `AssetType = MUTUAL_FUND|STOCK|OTHER`; nullable `ticker/quantity/pricePerUnit/value`
+  + `lastPrice/priceUpdatedAt/priceSource (MANUAL|API)`.
+- **`Recommendation = SAFE|CAUTION|WAIT`**.
 
 ## 4. Routes / pages
 
-**Pages (all `force-dynamic`):** `/` Planning dashboard · `/queue` · `/ranking` (drag) ·
-`/timeline` · `/wishlist` (cooling period + convert) · `/history` · `/simulator` · `/settings` ·
-`/wealth`.
+Pages (all `force-dynamic`): `/` Planning dashboard · `/queue` · `/ranking` (drag) · `/timeline` ·
+`/wishlist` · `/history` · `/simulator` · `/wealth` · `/settings`.
 
-**API (all `withErrorHandling`-wrapped):**
-- Planning: `GET/PUT /api/profile`; `GET/POST /api/items`; `GET/PUT/DELETE /api/items/[id]`;
-  `POST /api/items/[id]/{funding,complete,restore,convert,purchase}`; `POST /api/items/reorder`;
-  `POST /api/simulate`.
-- Wealth: `GET/POST /api/wealth`; `PUT/DELETE /api/wealth/[id]`.
+API (all wrapped by `withErrorHandling`: bad JSON→400, ZodError→400, Prisma `P2025`→404, `P2002`→409,
+else→500 with no stack leak): profile GET/PUT · simulate POST · items GET/POST · items/[id]
+GET/PUT/DELETE · items/[id]/{funding,complete,restore,convert,purchase} POST · items/reorder POST ·
+wealth GET/POST · wealth/[id] PUT/DELETE · **wealth/refresh-prices POST**.
 
-`withErrorHandling` maps bad JSON→400, ZodError→400, Prisma `P2025`→404, `P2002`→409, else→500
-(no stack leak).
+## 5. Dashboards
 
-## 5. Dashboard architecture
+**Planning** (`/`, `app/page.tsx` server → client `<Dashboard>`): loads profile + items + wealth-total
+in parallel. Holds a **Quick What-If** (item name + cost) that recomputes everything client-side from
+the pure finance functions (`simulatePurchase`, `projectMonthlyAllocation` with a reduced
+`startReserve`). Renders: KPI row (Reserve Health %, Future Funding Needed, Top Unfunded, Months to
+Fully Fund, Monthly Surplus) · a **passive Total Wealth** link (never in any calc) · WhatIf banner ·
+ReserveGauge (SVG) · FundingBars (with over-funding state) · LiabilityTreemap · GoalTimeline ·
+SurplusProjection (12-mo stacked).
 
-`app/page.tsx` (server) loads `getProfile()`, `getItems()`, `getWealthAssets()` in parallel and
-renders the client `<Dashboard profile items totalWealth>`. The Dashboard holds **Quick What-If**
-state and recomputes everything client-side from the pure finance functions:
+**Wealth** (`/wealth`): WealthKpiCards (Total, Holdings, Largest, Asset Types) · AllocationDonut (SVG
+donut + legend, value & % per type) · Refresh-prices button · assets grouped by type with subtotals,
+inline add/edit/delete, and an "as of <month>" price line. Fully independent of Planning.
 
-- `sim = simulatePurchase(profile, items, cost)` when cost > 0; `effProfile.reserveCurrent =
-  reserveCurrent − cost`.
-- Renders: **KpiCards** (Reserve Health %, Future Funding Needed, Top Unfunded, Months to Fully
-  Fund, Monthly Surplus) · passive **Total Wealth** link (never in any calc) · **WhatIfBar**
-  (+`RecommendationBanner`) · **ReserveGauge** · **FundingBars** · **LiabilityTreemap** ·
-  **GoalTimeline** · **SurplusProjection** (12-mo stacked, `startReserve = effProfile.reserveCurrent`).
-- Visual components are zero-dependency Tailwind + inline SVG.
+## 6. Calculation engines (pure)
 
-Wealth has no visual dashboard yet — `/wealth` is a grouped list with subtotals + total.
-
-## 6. Finance calculation engine
-
-**`lib/finance.ts` (Planning, pure):** `monthlySurplus`, `reserveDeficit`,
-`reserveRecoveryMonths`, `monthsToFullyFund`, `remaining`, `fundingProgress`,
+**`lib/finance.ts` (Planning):** `monthlySurplus`, `reserveDeficit`, `reserveRecoveryMonths`,
+`monthsToFullyFund`, `remaining`, `fundingProgress` (clamps pct, reports `overFundedBy`),
 `totalFutureLiability`, `sortQueue` (priority→rank→dueDate→title), `isActive`/`isDone`,
-**`projectFunding`** (month-by-month: refill reserve to target, then fund by queue order;
-120-mo horizon), **`projectMonthlyAllocation`** (same rule, per-month breakdown for the chart —
-near-duplicate of `projectFunding`), **`simulatePurchase`** (baseline-vs-after projection diff →
-`goalImpacts`/`nowUnfundable`/`underfunded`/`monthsToRestore`/`reductionPct`/recommendation),
-`projectedCompletion`.
+`projectedCompletion`, **`simulatePurchase`** (baseline-vs-after projection diff →
+`goalImpacts`/`nowUnfundable`/`underfunded`/`monthsToRestore`/`reductionPct`/recommendation).
+**One private `runAllocation` core** (reserve-refill-first, then priority/rank order, 120-mo horizon)
+backs both `projectFunding` (returns per-item completion month) and `projectMonthlyAllocation`
+(per-month breakdown) — they cannot drift.
 
-**`lib/wealth.ts` (Wealth, pure, independent):** `assetValue` (`quantity × pricePerUnit` else
-`value ?? 0`), `totalWealth`, `groupByType`.
+**`lib/wealth.ts` (Wealth):** `assetValue` (`qty×price` else manual), `totalWealth`, `groupByType`,
+`allocationByType`, `largestHolding`.
 
-Planning never reads Wealth and vice versa.
+**`lib/market/provider.ts`:** `PriceProvider` interface + `manualProvider` (no live quotes) +
+`getPriceProvider()` (env-switchable later). The single market-data boundary; `finance.ts` never
+imports it.
 
-## 7. Recommended changes
+## 7. Status of recommendations (✅ done / ☐ open)
 
-### A. Planning dashboard
-- Consolidate `projectFunding` + `projectMonthlyAllocation` into one `stepMonth()` primitive (they can drift — REVIEW P2-3).
-- Extract the cooling-period rule from the route + wishlist page into a pure `coolingDaysRemaining()` in `finance.ts` (REVIEW P2-5).
-- Centralize the read/DTO mapping in `data.ts`; `GET /api/items` currently returns a different shape than `getItems()` (REVIEW P2-4).
-- Mark which dashboard tiles are simulated when a what-if is active (REVIEW P2-7).
+✅ **Planning/Wealth split** + Protected Capital removed (used in zero calcs).
+✅ **Wealth visual dashboard** — KPI row + allocation donut.
+✅ **Projection engines consolidated** onto one `runAllocation` core (+ consistency test).
+✅ **Over-funding surfaced** — `fundingProgress.overFundedBy`, amber UI state; **funding-history**
+   summary in the panel.
+✅ **Market-data groundwork** — `PriceProvider` interface + manual provider, `lastPrice/priceUpdatedAt/
+   priceSource`, `POST /api/wealth/refresh-prices` (no-op under manual mode), manual-price "as of" stamps.
+✅ **API error wrapper** (`withErrorHandling`) on every route.
 
-### B. Wealth dashboard
-- Give Wealth its own visual layer: type-allocation chart (donut/treemap), per-type subtotals, total headline, a WealthKpiCards row. Add `allocationByType()` to `lib/wealth.ts`.
-- Add `getWealthAsset(id)` + a `toAsset()` mapper to `data.ts`; validate `type` on read.
+☐ **Wire a real price provider** behind `PriceProvider` (e.g. an MF NAV / equity quote API), env-gated,
+   plus a scheduled/refresh trigger. Value math already keys off `pricePerUnit`, so no change needed there.
+☐ **Cost basis / gain-loss** on `WealthAsset` (`costBasis`, `purchaseDate`); `account`/`institution`;
+   per-asset `currency` (today implicitly INR).
+☐ **Centralize the read/DTO mapping** in `data.ts` — `GET /api/items` still returns a slightly different
+   shape than `getItems()`; add `getItem(id)`/`getWealthAsset(id)` + single mappers (eases future auth).
+☐ **Extract the cooling-period rule** from the route + wishlist page into a pure `coolingDaysRemaining()`.
+☐ **Mark which dashboard tiles are simulated** when a What-If is active (gauge shifts, KPI cards don't).
+☐ **Test coverage** for API route handlers and the Dashboard recompute (only pure libs are tested today).
+☐ **Money as integer paise** (vs Float) if exactness becomes critical.
+☐ **`prisma migrate`** instead of `db push`; **prod-guard the destructive seed**; before any shared/real DB.
+☐ **Multi-user/auth** (currently single-user; `FinancialProfile` is a hard-coded singleton `id=1`).
 
-### C. Funding transactions
-- Cap over-funding or carry overflow visibly (`fundedAmount` is uncapped; overflow vanishes from liability, pct can exceed 100 — REVIEW P2-9).
-- Add a dedicated funding-history view (data exists via `getFundings`).
-- Optional `FundingTransaction.kind` (`DEPOSIT|WITHDRAWAL|ADJUSTMENT`) headroom.
+## 8. How to run
 
-### D. Investment assets
-- Add `costBasis` (+ `purchaseDate`) for gain/loss; `account`/`institution`; `currency` (today implicitly INR).
+```bash
+npm install
+npm run db:push      # sync SQLite schema (after pulling schema changes too)
+npm run db:seed      # demo data (Planning items + Wealth assets) — destructive reseed
+npm run dev          # http://localhost:3000
+npm test             # 56 Vitest unit tests
+npm run build        # production build
+```
 
-### E. Future market-data integration (headroom already present via `ticker` + `pricePerUnit`)
-- Add `lastPrice`, `priceUpdatedAt`, `priceSource (MANUAL|API)` so a fetched quote updates `pricePerUnit` while keeping a manual override. `assetValue` keys off `quantity × pricePerUnit`, so the value math needs no change.
-- Introduce a `PriceProvider` interface in `lib/market/` (`ManualProvider` now, API provider later).
-- A batch refresh endpoint/job (`POST /api/wealth/refresh-prices`) for assets with a `ticker`, behind a flag.
-- Keep the hard rule: market data stays in Wealth; `finance.ts` never imports `lib/market/` or `lib/wealth.ts`.
+## 9. Constraints / gotchas (for whoever works on this next)
 
-### Cross-cutting (REVIEW.md, still open)
-- API/handler + Dashboard test coverage (only pure libs tested today).
-- Money as integer paise vs Float, if exactness becomes critical.
-- `prisma migrate` instead of `db push`; prod-guard the destructive seed; before any shared/real DB.
+- **No auth** by design; `FinancialProfile` is a singleton. Multi-user is a deliberate future step.
+- **Keep the Planning/Wealth firewall:** `lib/finance.ts` must never import `lib/wealth.ts` or
+  `lib/market/`. Wealth/market values are display-only and must not influence reserve/projection/simulator.
+- **Native binaries / `node_modules` are per-OS** (esbuild, lightningcss, Prisma engine, rolldown). Do
+  not share/sync a single `node_modules` across macOS and Linux — reinstall per platform. Never run
+  `npm audit fix --force` (it has silently downgraded `next`).
+- Currency is hardcoded ₹/`en-IN`; locale is not yet centralized.
+
+---
+
+### Suggested prompt to get next steps
+
+> "Here's the architecture of my Next.js personal finance app (ARCHITECTURE.md below). Given the
+> ✅ done and ☐ open items in §7, propose a prioritized next-steps plan — what to build next and why,
+> with any design decisions I should make. Keep the Planning/Wealth firewall intact."
