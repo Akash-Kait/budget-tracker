@@ -21,6 +21,8 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
       quantity: d.quantity ?? null,
       pricePerUnit: d.pricePerUnit ?? null,
       value: d.value ?? null,
+      costBasis: d.costBasis ?? null,
+      purchaseDate: d.purchaseDate ? new Date(d.purchaseDate) : null,
       // a user-entered unit price is a MANUAL source, stamped now
       priceSource: d.pricePerUnit != null ? 'MANUAL' : null,
       priceUpdatedAt: d.pricePerUnit != null ? new Date() : null,

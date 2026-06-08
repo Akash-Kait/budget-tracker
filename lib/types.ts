@@ -35,6 +35,8 @@ export interface WealthAsset {
   lastPrice: number | null;
   priceUpdatedAt: string | null; // ISO
   priceSource: PriceSource | null;
+  costBasis: number | null; // total amount invested; null = unknown
+  purchaseDate: string | null; // ISO
 }
 
 export interface Item {

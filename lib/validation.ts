@@ -17,6 +17,8 @@ export const wealthAssetSchema = z
     quantity: z.number().min(0).nullable().optional(),
     pricePerUnit: z.number().min(0).nullable().optional(),
     value: z.number().min(0).nullable().optional(),
+    costBasis: z.number().min(0).nullable().optional(),
+    purchaseDate: z.string().datetime().nullable().optional(),
   })
   .refine((d) => (d.quantity != null && d.pricePerUnit != null) || d.value != null, {
     message: 'Provide either quantity + price, or a manual value',

@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Money } from '@/components/Money';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
-import { assetValue } from '@/lib/wealth';
+import { GainLossText } from '@/components/wealth/GainLossText';
+import { assetValue, assetGainLoss } from '@/lib/wealth';
 import { formatMonth } from '@/lib/format';
 import type { WealthAsset } from '@/lib/types';
 
@@ -49,11 +50,14 @@ export function WealthAssetRow({ asset }: { asset: WealthAsset }) {
           ? `${asset.priceSource === 'API' ? 'Live' : 'Manual'} · ${formatMonth(asset.priceUpdatedAt)}`
           : ''}
       </span>
-      {/* Value + actions */}
+      {/* Value + gain/loss + actions */}
       <div className="col-span-2 flex items-center justify-between sm:col-span-1 sm:justify-end sm:gap-4">
-        <span className="font-mono text-sm font-medium tabular-nums text-text">
-          <Money amount={assetValue(asset)} />
-        </span>
+        <div className="sm:text-right">
+          <div className="font-mono text-sm font-medium tabular-nums text-text">
+            <Money amount={assetValue(asset)} />
+          </div>
+          <GainLossText gl={assetGainLoss(asset)} className="text-xs" />
+        </div>
         <span className="flex gap-3">
           <button onClick={() => setEditing(true)} className="text-xs text-muted transition-colors hover:text-accent">
             Edit

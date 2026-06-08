@@ -19,6 +19,8 @@ export const PUT = withErrorHandling(
         quantity: d.quantity ?? null,
         pricePerUnit: d.pricePerUnit ?? null,
         value: d.value ?? null,
+        costBasis: d.costBasis ?? null,
+        purchaseDate: d.purchaseDate ? new Date(d.purchaseDate) : null,
         priceSource: d.pricePerUnit != null ? 'MANUAL' : null,
         priceUpdatedAt: d.pricePerUnit != null ? new Date() : null,
       },

@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { assetValue, totalWealth, groupByType, allocationByType, largestHolding } from '@/lib/wealth';
+import {
+  assetValue,
+  totalWealth,
+  groupByType,
+  allocationByType,
+  largestHolding,
+  assetCostBasis,
+  assetGainLoss,
+  totalCostBasis,
+  totalGainLoss,
+} from '@/lib/wealth';
 import type { WealthAsset } from '@/lib/types';
 
 function asset(p: Partial<WealthAsset>): WealthAsset {
@@ -14,6 +24,8 @@ function asset(p: Partial<WealthAsset>): WealthAsset {
     lastPrice: null,
     priceUpdatedAt: null,
     priceSource: null,
+    costBasis: null,
+    purchaseDate: null,
     ...p,
   };
 }
@@ -77,5 +89,71 @@ describe('largestHolding', () => {
   });
   it('is null when empty', () => {
     expect(largestHolding([])).toBeNull();
+  });
+});
+
+describe('assetCostBasis', () => {
+  it('is null when unknown (never 0)', () => {
+    expect(assetCostBasis(asset({}))).toBeNull();
+  });
+  it('returns the value when set, including 0', () => {
+    expect(assetCostBasis(asset({ costBasis: 1000 }))).toBe(1000);
+    expect(assetCostBasis(asset({ costBasis: 0 }))).toBe(0);
+  });
+});
+
+describe('assetGainLoss', () => {
+  it('is null when cost basis is unknown — distinct from a flat 0 result', () => {
+    const r = assetGainLoss(asset({ value: 1000 }));
+    expect(r).toBeNull();
+  });
+  it('reports a gain', () => {
+    expect(assetGainLoss(asset({ value: 1200, costBasis: 1000 }))).toEqual({ absolute: 200, pct: 20 });
+  });
+  it('reports a loss', () => {
+    expect(assetGainLoss(asset({ value: 800, costBasis: 1000 }))).toEqual({ absolute: -200, pct: -20 });
+  });
+  it('reports a flat position as zero (not null)', () => {
+    expect(assetGainLoss(asset({ value: 1000, costBasis: 1000 }))).toEqual({ absolute: 0, pct: 0 });
+  });
+  it('guards zero cost basis: absolute = value, pct null', () => {
+    expect(assetGainLoss(asset({ value: 500, costBasis: 0 }))).toEqual({ absolute: 500, pct: null });
+  });
+  it('uses qty×price for current value', () => {
+    expect(assetGainLoss(asset({ quantity: 10, pricePerUnit: 150, costBasis: 1000 }))).toEqual({
+      absolute: 500,
+      pct: 50,
+    });
+  });
+  it('uses manual value for current value', () => {
+    expect(assetGainLoss(asset({ value: 1500, costBasis: 1000 }))).toEqual({ absolute: 500, pct: 50 });
+  });
+});
+
+describe('totalCostBasis', () => {
+  it('is null when no asset has a cost basis', () => {
+    expect(totalCostBasis([asset({ value: 100 }), asset({ value: 200 })])).toBeNull();
+  });
+  it('sums known cost bases in a mixed portfolio', () => {
+    expect(totalCostBasis([asset({ costBasis: 1000 }), asset({}), asset({ costBasis: 500 })])).toBe(1500);
+  });
+});
+
+describe('totalGainLoss', () => {
+  it('is null when no asset has a cost basis', () => {
+    expect(totalGainLoss([asset({ value: 100 })])).toBeNull();
+  });
+  it('aggregates only the covered subset of a mixed portfolio', () => {
+    // covered: value 1200 basis 1000, and value 900 basis 1000 → abs 100, basis 2000 → 5%
+    // the no-basis asset (value 9999) is excluded.
+    const r = totalGainLoss([
+      asset({ value: 1200, costBasis: 1000 }),
+      asset({ value: 9999 }),
+      asset({ value: 900, costBasis: 1000 }),
+    ]);
+    expect(r).toEqual({ absolute: 100, pct: 5 });
+  });
+  it('guards zero total cost basis', () => {
+    expect(totalGainLoss([asset({ value: 500, costBasis: 0 })])).toEqual({ absolute: 500, pct: null });
   });
 });

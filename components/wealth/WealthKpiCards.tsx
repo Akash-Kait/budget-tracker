@@ -1,5 +1,6 @@
 import { Money } from '@/components/Money';
-import { assetValue, largestHolding } from '@/lib/wealth';
+import { GainLossText } from '@/components/wealth/GainLossText';
+import { assetValue, largestHolding, assetCostBasis, totalGainLoss } from '@/lib/wealth';
 import type { WealthAsset } from '@/lib/types';
 
 function Kpi({
@@ -27,12 +28,29 @@ function Kpi({
 export function WealthKpiCards({ assets, total }: { assets: WealthAsset[]; total: number }) {
   const largest = largestHolding(assets);
   const typeCount = new Set(assets.map((a) => a.type)).size;
+  const gl = totalGainLoss(assets);
+  const covered = assets.filter((a) => assetCostBasis(a) !== null).length;
+  const partial = covered > 0 && covered < assets.length;
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       <Kpi label="Total Wealth" hero>
         <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-text">
           <Money amount={total} />
         </p>
+      </Kpi>
+      <Kpi label="Total Gain / Loss">
+        {gl ? (
+          <>
+            <GainLossText gl={gl} className="text-2xl font-semibold" />
+            {partial && (
+              <p className="mt-0.5 text-[11px] text-faint">
+                based on {covered} of {assets.length} holdings
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="font-mono text-3xl font-semibold text-faint">—</p>
+        )}
       </Kpi>
       <Kpi label="Holdings">
         <p className="font-mono text-3xl font-semibold tabular-nums text-text">{assets.length}</p>

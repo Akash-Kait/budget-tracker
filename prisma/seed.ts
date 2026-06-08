@@ -68,10 +68,10 @@ async function main() {
   await prisma.wealthAsset.deleteMany();
   await prisma.wealthAsset.createMany({
     data: [
-      { type: 'MUTUAL_FUND', name: 'Nifty 50 Index Fund', ticker: 'NIFTY50', quantity: 1200, pricePerUnit: 95.4 },
-      { type: 'MUTUAL_FUND', name: 'Flexi Cap Fund', quantity: 800, pricePerUnit: 62.1 },
-      { type: 'STOCK', name: 'Infosys', ticker: 'INFY', quantity: 50, pricePerUnit: 1480 },
-      { type: 'STOCK', name: 'HDFC Bank', ticker: 'HDFCBANK', quantity: 30, pricePerUnit: 1650 },
+      { type: 'MUTUAL_FUND', name: 'Nifty 50 Index Fund', ticker: 'NIFTY50', quantity: 1200, pricePerUnit: 95.4, costBasis: 100000, purchaseDate: new Date('2024-04-01') },
+      { type: 'MUTUAL_FUND', name: 'Flexi Cap Fund', quantity: 800, pricePerUnit: 62.1, costBasis: 55000, purchaseDate: new Date('2025-01-15') },
+      { type: 'STOCK', name: 'Infosys', ticker: 'INFY', quantity: 50, pricePerUnit: 1480, costBasis: 60000, purchaseDate: new Date('2024-08-10') },
+      { type: 'STOCK', name: 'HDFC Bank', ticker: 'HDFCBANK', quantity: 30, pricePerUnit: 1650, costBasis: 52000, purchaseDate: new Date('2025-03-01') },
       { type: 'OTHER', name: 'Sovereign Gold Bond', value: 150000 },
     ],
   });

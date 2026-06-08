@@ -15,6 +15,8 @@ export function WealthAssetForm({ initial, onDone }: Props) {
     quantity: initial?.quantity != null ? String(initial.quantity) : '',
     pricePerUnit: initial?.pricePerUnit != null ? String(initial.pricePerUnit) : '',
     value: initial?.value != null ? String(initial.value) : '',
+    costBasis: initial?.costBasis != null ? String(initial.costBasis) : '',
+    purchaseDate: initial?.purchaseDate ? initial.purchaseDate.slice(0, 10) : '',
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,7 +36,16 @@ export function WealthAssetForm({ initial, onDone }: Props) {
       return;
     }
     setBusy(true);
-    const payload = { type: form.type, name: form.name, ticker: form.ticker || null, quantity, pricePerUnit, value };
+    const payload = {
+      type: form.type,
+      name: form.name,
+      ticker: form.ticker || null,
+      quantity,
+      pricePerUnit,
+      value,
+      costBasis: form.costBasis === '' ? null : Number(form.costBasis),
+      purchaseDate: form.purchaseDate ? new Date(form.purchaseDate).toISOString() : null,
+    };
     const url = initial ? `/api/wealth/${initial.id}` : '/api/wealth';
     const res = await fetch(url, {
       method: initial ? 'PUT' : 'POST',
@@ -89,6 +100,14 @@ export function WealthAssetForm({ initial, onDone }: Props) {
       <label className="flex flex-col gap-1">
         <span className="text-[11px] uppercase tracking-wide text-faint">Manual value</span>
         <input className={`${field} font-mono tabular-nums`} type="number" placeholder="₹ (if no qty×price)" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] uppercase tracking-wide text-faint">Cost basis</span>
+        <input className={`${field} font-mono tabular-nums`} type="number" placeholder="₹ total invested (optional)" value={form.costBasis} onChange={(e) => setForm({ ...form, costBasis: e.target.value })} />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] uppercase tracking-wide text-faint">Purchase date</span>
+        <input className={field} type="date" value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} />
       </label>
 
       <div className="flex items-center gap-3 sm:col-span-3">
