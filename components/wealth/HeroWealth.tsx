@@ -45,11 +45,11 @@ export function HeroWealth({
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-hairline bg-surface p-8">
-      {/* static radial glow — decoration only, conveys nothing */}
+      {/* static radial glow — decoration only; sits behind/beneath the hero figure */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full"
-        style={{ background: 'radial-gradient(circle, var(--accent-weak), transparent 70%)' }}
+        className="pointer-events-none absolute left-2 top-16 h-56 w-[28rem] max-w-[110%] rounded-full opacity-90 blur-2xl sm:top-20"
+        style={{ background: 'radial-gradient(60% 100% at 22% 50%, var(--accent-weak), transparent 70%)' }}
       />
       <div className="relative flex items-start justify-between gap-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-faint">
@@ -57,10 +57,10 @@ export function HeroWealth({
         </p>
         <RefreshPricesButton />
       </div>
-      <p className="relative mt-3 font-mono text-5xl font-semibold tabular-nums tracking-tight text-text sm:text-6xl">
+      <p className="relative mt-3 font-sans text-5xl font-bold tabular-nums tracking-tight text-text sm:text-6xl">
         {formatINR(totalShown)}
       </p>
-      <p className={`relative mt-2 font-mono text-lg tabular-nums ${glColor}`}>
+      <p className={`relative mt-2 font-sans text-lg font-semibold tabular-nums ${glColor}`}>
         {gl === null ? '— cost basis not set' : `${sign}${formatINR(Math.abs(glShown))}${pctText}`}
         {partial && gl !== null && (
           <span className="ml-2 font-sans text-xs text-faint">

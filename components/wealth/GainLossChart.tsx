@@ -33,10 +33,24 @@ export function GainLossChart({ data }: { data: GainLossRow[] }) {
     return <div className="flex h-44 items-center justify-center text-sm text-faint">No holdings.</div>;
   }
   const height = Math.max(160, data.length * 44);
+  const hasUnknown = data.some((r) => r.status === 'none');
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <div>
+      <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+        <defs>
+          {/* "no cost basis" = indeterminate, not zero: a diagonal hatch reads as unmeasured */}
+          <pattern
+            id="nobasis-hatch"
+            width="6"
+            height="6"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <line x1="0" y1="0" x2="0" y2="6" stroke={c.none} strokeWidth="2" strokeOpacity="0.45" />
+          </pattern>
+        </defs>
         <XAxis type="number" hide />
         <YAxis
           type="category"
@@ -67,11 +81,36 @@ export function GainLossChart({ data }: { data: GainLossRow[] }) {
           }}
         />
         <Bar dataKey="value" radius={[0, 6, 6, 0]} isAnimationActive={!reduced} animationDuration={700}>
-          {data.map((r, i) => (
-            <Cell key={i} fill={c[r.status]} />
-          ))}
+          {data.map((r, i) =>
+            r.status === 'none' ? (
+              <Cell
+                key={i}
+                fill="url(#nobasis-hatch)"
+                stroke={c.none}
+                strokeOpacity={0.5}
+                strokeWidth={1}
+              />
+            ) : (
+              <Cell key={i} fill={c[r.status]} />
+            ),
+          )}
         </Bar>
       </BarChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+      {hasUnknown && (
+        <p className="mt-2 flex items-center gap-2 text-xs text-faint">
+          <span
+            aria-hidden
+            className="inline-block h-3 w-4 rounded-sm border border-hairline-strong"
+            style={{
+              background:
+                'repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 4px)',
+              opacity: 0.5,
+            }}
+          />
+          striped = no cost basis set
+        </p>
+      )}
+    </div>
   );
 }
