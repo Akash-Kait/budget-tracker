@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { usePrefersReducedMotion } from '@/components/wealth/usePrefersReducedMotion';
+import { usePrefersReducedMotion } from '@/components/hooks/usePrefersReducedMotion';
 
 /**
  * Animates 0 → target (easeOutCubic) for hero figures. Honors reduced-motion by jumping straight to

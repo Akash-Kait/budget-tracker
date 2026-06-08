@@ -15,7 +15,7 @@ export function LiabilityTreemap({ data }: { data: { title: string; remaining: n
             style={{
               flexGrow: Math.max(1, Math.round(share * 100)),
               flexBasis: `${Math.max(15, share * 100)}%`,
-              backgroundColor: colorFor(idx),
+              backgroundImage: `linear-gradient(155deg, ${colorFor(idx)}, ${colorFor(idx)}99)`,
             }}
           >
             <span className="text-sm font-semibold">{d.title}</span>

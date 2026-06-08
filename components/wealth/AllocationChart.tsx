@@ -1,6 +1,6 @@
 'use client';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { usePrefersReducedMotion } from '@/components/wealth/usePrefersReducedMotion';
+import { usePrefersReducedMotion } from '@/components/hooks/usePrefersReducedMotion';
 import { formatINR } from '@/lib/format';
 
 interface Slice {

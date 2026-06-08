@@ -1,6 +1,6 @@
 'use client';
 import { RefreshPricesButton } from '@/components/wealth/RefreshPricesButton';
-import { useCountUp } from '@/components/wealth/useCountUp';
+import { useCountUp } from '@/components/hooks/useCountUp';
 import { formatINR } from '@/lib/format';
 
 interface Alloc {

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { usePrefersReducedMotion } from '@/components/wealth/usePrefersReducedMotion';
+import { usePrefersReducedMotion } from '@/components/hooks/usePrefersReducedMotion';
 import { formatINR } from '@/lib/format';
 
 export interface GainLossRow {
