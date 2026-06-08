@@ -9,7 +9,7 @@ export function SurplusProjection({
   data: MonthlyAllocation[];
   surplus: number;
 }) {
-  if (surplus <= 0) return <p className="text-sm text-gray-500">No surplus to allocate.</p>;
+  if (surplus <= 0) return <p className="text-sm text-muted">No surplus to allocate.</p>;
   const titles = Array.from(new Set(data.flatMap((m) => m.items.map((i) => i.title))));
   const colorOf = (title: string) => colorFor(titles.indexOf(title));
   const max = Math.max(
@@ -36,7 +36,7 @@ export function SurplusProjection({
                   />
                 ))}
               </div>
-              <span className="mt-1 origin-left rotate-45 text-[9px] text-gray-400">
+              <span className="mt-1 origin-left rotate-45 text-[9px] text-faint">
                 {m.month.split(' ')[0]}
               </span>
             </div>

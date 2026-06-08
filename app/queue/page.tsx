@@ -14,7 +14,7 @@ export default async function QueuePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Priority Queue</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted">
         Active items, sorted by priority (highest first), then by due date. Completed items move to
         History.
       </p>
@@ -23,7 +23,7 @@ export default async function QueuePage() {
       </Card>
       <Card>
         {queue.length === 0 ? (
-          <p className="text-sm text-gray-500">No active items.</p>
+          <p className="text-sm text-muted">No active items.</p>
         ) : (
           queue.map((i) => (
             <EditableItemRow

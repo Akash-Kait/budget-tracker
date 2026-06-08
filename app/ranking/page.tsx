@@ -10,13 +10,13 @@ export default async function RankingPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Priority Ranking</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted">
         Drag to reorder. Ranking sets the order <em>within</em> a priority level — higher-priority
         items always stay on top. This order drives the queue and the simulator&apos;s projections.
       </p>
       <Card>
         {items.length === 0 ? (
-          <p className="text-sm text-gray-500">No active items.</p>
+          <p className="text-sm text-muted">No active items.</p>
         ) : (
           <RankingList initial={items} />
         )}

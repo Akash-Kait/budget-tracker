@@ -33,10 +33,14 @@ is shared by Planning **and** Wealth.
   "renders correctly / not broken," and keeps Planning fully out of scope (no risk of unreadable
   dark-on-dark text).
 
-**This is a deliberate, temporary interim state — not a bug, and not to be "fixed" out of scope.**
+**✅ RESOLVED 2026-06-08** — Planning was re-themed onto the dark tokens (see
+`2026-06-08-planning-dark-retheme-design.md`). The whole app is now dark; the interim light-on-dark
+state described below no longer exists.
+
+~~**This is a deliberate, temporary interim state — not a bug, and not to be "fixed" out of scope.**
 Planning pages intentionally remain light cards on the dark shell until a dedicated follow-up
 re-themes Planning to the same tokens (see §10 Follow-ups). Anyone reviewing the dark app should
-treat light Planning surfaces as expected, scoped-out work-in-progress.
+treat light Planning surfaces as expected, scoped-out work-in-progress.~~
 
 **Seam quality (must verify, §9):** the risk with light-on-dark is harsh seams. While implementing I
 will confirm: (1) the shared `Card.tsx` keeps an adequate, visible-but-not-glaring border and
@@ -207,8 +211,9 @@ isolated build copy; report results and the exact list of changed files. Specifi
 
 ## 10. Follow-ups (post-implementation, out of scope here)
 
-- **Re-theme Planning** (`components/Card.tsx` + all `components/dashboard/*` and Planning pages) to
-  the same dark tokens, retiring the interim light-on-dark state from §2.
+- ~~**Re-theme Planning** (`components/Card.tsx` + all `components/dashboard/*` and Planning pages) to
+  the same dark tokens, retiring the interim light-on-dark state from §2.~~ **✅ Done 2026-06-08** —
+  see `2026-06-08-planning-dark-retheme-design.md`.
 - **Cost-basis / gain-loss** Wealth feature will consume `--positive`/`--negative` (now reserved and
   distinct from the brand accent) for unambiguous gain/loss figures.
 

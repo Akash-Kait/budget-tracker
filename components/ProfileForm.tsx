@@ -34,20 +34,20 @@ export function ProfileForm({ initial }: { initial: Profile }) {
     <form onSubmit={save} className="grid gap-3 sm:grid-cols-2">
       {fields.map((f) => (
         <label key={f.key} className="text-sm">
-          <span className="mb-1 block text-gray-600">{f.label}</span>
+          <span className="mb-1 block text-muted">{f.label}</span>
           <input
             type="number"
-            className="w-full rounded-md border border-gray-300 px-2 py-1"
+            className="w-full rounded-md border border-hairline bg-surface-2 px-2 py-1 text-text outline-none focus:border-accent focus:ring-2 focus:ring-accent-weak"
             value={form[f.key]}
             onChange={(e) => setForm({ ...form, [f.key]: Number(e.target.value) })}
           />
         </label>
       ))}
       <div className="col-span-full">
-        <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <button className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg transition-opacity hover:opacity-90">
           Save
         </button>
-        {saved && <span className="ml-3 text-sm text-green-600">Saved</span>}
+        {saved && <span className="ml-3 text-sm text-accent">Saved</span>}
       </div>
     </form>
   );

@@ -18,7 +18,8 @@ export function WhatIfBar({
   onClear: () => void;
   sim: SimulationResult | null;
 }) {
-  const input = 'rounded-md border border-gray-300 px-3 py-2 text-sm';
+  const input =
+    'rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-faint outline-none focus:border-accent focus:ring-2 focus:ring-accent-weak';
   return (
     <Card title="Quick What-If">
       <div className="flex flex-wrap items-center gap-2">
@@ -38,13 +39,13 @@ export function WhatIfBar({
         {sim && (
           <button
             onClick={onClear}
-            className="rounded-md bg-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-300"
+            className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm font-medium text-text transition-colors hover:border-hairline-strong"
           >
             Clear Simulation
           </button>
         )}
         {sim && (
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-faint">
             Simulating — dashboard reflects this purchase (not saved).
           </span>
         )}

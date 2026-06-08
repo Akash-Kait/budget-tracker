@@ -22,7 +22,7 @@ export default async function WishlistPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Wishlist</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted">
         Items can&apos;t be marked purchased until their cooling period expires — a guard against
         impulse buys.
       </p>
@@ -31,7 +31,7 @@ export default async function WishlistPage() {
       </Card>
       <Card>
         {withDays.length === 0 ? (
-          <p className="text-sm text-gray-500">No wishes yet.</p>
+          <p className="text-sm text-muted">No wishes yet.</p>
         ) : (
           withDays.map(({ item, daysRemaining, daysOld }) => (
             <WishlistRow

@@ -2,7 +2,7 @@ import { formatINR } from '@/lib/format';
 import { colorFor } from '@/lib/colors';
 
 export function LiabilityTreemap({ data }: { data: { title: string; remaining: number }[] }) {
-  if (data.length === 0) return <p className="text-sm text-gray-500">No outstanding obligations.</p>;
+  if (data.length === 0) return <p className="text-sm text-muted">No outstanding obligations.</p>;
   const total = data.reduce((s, d) => s + d.remaining, 0);
   return (
     <div className="flex h-56 w-full flex-wrap gap-1">

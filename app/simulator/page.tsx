@@ -34,7 +34,7 @@ export default function SimulatorPage() {
     setResult(await res.json());
   }
 
-  const input = 'w-full rounded-md border border-gray-300 px-3 py-2 text-sm';
+  const input = 'w-full rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-faint outline-none focus:border-accent focus:ring-2 focus:ring-accent-weak';
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Purchase Impact Simulator</h1>
@@ -53,10 +53,10 @@ export default function SimulatorPage() {
             value={cost}
             onChange={(e) => setCost(e.target.value)}
           />
-          <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <button className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg transition-opacity hover:opacity-90">
             Simulate
           </button>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-negative">{error}</p>}
         </form>
       </Card>
 
@@ -70,7 +70,7 @@ export default function SimulatorPage() {
               </p>
             </Card>
             <Card title="Reserve After">
-              <p className={`text-xl font-bold ${result.reserveAfter < 0 ? 'text-red-600' : ''}`}>
+              <p className={`text-xl font-bold ${result.reserveAfter < 0 ? 'text-negative' : ''}`}>
                 <Money amount={result.reserveAfter} />
               </p>
             </Card>
@@ -91,11 +91,11 @@ export default function SimulatorPage() {
                 <p key={g.title} className="text-sm">
                   {g.title}:{' '}
                   {g.nowUnfundable ? (
-                    <span className="text-red-600">no longer fundable within 10 years</span>
+                    <span className="text-negative">no longer fundable within 10 years</span>
                   ) : g.delayMonths > 0 ? (
-                    <span className="text-red-600">delayed {g.delayMonths} month(s)</span>
+                    <span className="text-negative">delayed {g.delayMonths} month(s)</span>
                   ) : (
-                    <span className="text-green-600">no impact</span>
+                    <span className="text-accent">no impact</span>
                   )}
                 </p>
               ))}
@@ -103,8 +103,8 @@ export default function SimulatorPage() {
           )}
           {result.underfunded.length > 0 && (
             <Card title="Pushed past due date">
-              <p className="text-sm text-red-600">{result.underfunded.join(', ')}</p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="text-sm text-negative">{result.underfunded.join(', ')}</p>
+              <p className="mt-1 text-xs text-muted">
                 This purchase delays funding enough that these dated items miss their target date.
               </p>
             </Card>

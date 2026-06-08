@@ -36,25 +36,25 @@ export function WishlistRow({
   }
 
   return (
-    <div className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0">
+    <div className="flex items-center justify-between border-b border-hairline py-3 last:border-0">
       <div>
-        <p className="font-medium">
+        <p className="font-medium text-text">
           {item.title}{' '}
-          {item.purchased && <span className="text-xs text-green-600">✓ purchased</span>}
+          {item.purchased && <span className="text-xs text-accent">✓ purchased</span>}
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           <Money amount={item.amount} /> · P{item.priority}
           {item.notes ? ` · ${item.notes}` : ''}
         </p>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-faint">
           Added: {daysOld} day{daysOld === 1 ? '' : 's'} ago
         </p>
         {locked && (
-          <p className="text-xs text-amber-600">
+          <p className="text-xs text-warning">
             Cooling period: {daysRemaining} day{daysRemaining > 1 ? 's' : ''} remaining
           </p>
         )}
-        {msg && <p className="text-xs text-red-600">{msg}</p>}
+        {msg && <p className="text-xs text-negative">{msg}</p>}
         {!item.purchased && <ConvertForm itemId={item.id} defaultAmount={item.amount} />}
       </div>
       <div className="flex items-center gap-3">
@@ -64,14 +64,14 @@ export function WishlistRow({
             disabled={locked}
             className={`rounded-md px-3 py-1 text-sm font-medium ${
               locked
-                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
-                : 'bg-green-600 text-white hover:bg-green-700'
+                ? 'cursor-not-allowed bg-surface-2 text-faint'
+                : 'bg-accent text-bg transition-opacity hover:opacity-90'
             }`}
           >
             Mark purchased
           </button>
         )}
-        <button onClick={del} className="text-xs text-red-500 hover:underline">
+        <button onClick={del} className="text-xs text-muted hover:text-negative">
           Delete
         </button>
       </div>

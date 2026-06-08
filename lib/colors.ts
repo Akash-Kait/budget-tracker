@@ -1,14 +1,17 @@
+// Categorical data-viz palette for Planning (treemap, surplus projection). Mid-tone hues tuned to
+// stay legible — and hold white labels — on the dark --surface. Distinct from the reserved
+// accent/positive/negative semantic tokens. (WEALTH_CHART/RESERVE_COLOR below are unchanged.)
 const PALETTE = [
-  '#3b82f6',
+  '#6366f1',
   '#8b5cf6',
   '#ec4899',
   '#f59e0b',
-  '#10b981',
-  '#06b6d4',
-  '#ef4444',
-  '#6366f1',
-  '#84cc16',
-  '#f97316',
+  '#22d3ee',
+  '#f87171',
+  '#38bdf8',
+  '#a3e635',
+  '#fb923c',
+  '#2dd4bf',
 ];
 
 export function colorFor(index: number): string {

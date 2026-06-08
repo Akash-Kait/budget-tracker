@@ -14,6 +14,8 @@
   --accent-weak: rgba(52, 211, 153, 0.14);
   --positive: #4ade80; /* financial gains only */
   --negative: #f87171; /* financial losses only */
+  --warning: #fbbf24; /* generic caution status (amber) — not gain/loss */
+  --warning-weak: rgba(251, 191, 36, 0.14);
 }
 
 /* Expose tokens as Tailwind v4 utilities (bg-surface, text-muted, border-hairline, text-accent, …).
@@ -31,6 +33,8 @@
   --color-accent-weak: var(--accent-weak);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-warning-weak: var(--warning-weak);
   --font-sans: var(--font-hanken), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", Menlo, monospace;
 }

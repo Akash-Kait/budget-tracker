@@ -59,7 +59,8 @@ export function ItemForm({ initial, defaultType, onDone }: Props) {
     router.refresh();
   }
 
-  const input = 'rounded-md border border-gray-300 px-2 py-1 text-sm';
+  const input =
+    'rounded-md border border-hairline bg-surface-2 px-2 py-1 text-sm text-text placeholder:text-faint outline-none focus:border-accent focus:ring-2 focus:ring-accent-weak';
   return (
     <form onSubmit={submit} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <select
@@ -126,11 +127,11 @@ export function ItemForm({ initial, defaultType, onDone }: Props) {
       )}
       <button
         type="submit"
-        className="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+        className="rounded-md bg-accent px-3 py-1 text-sm font-medium text-bg transition-opacity hover:opacity-90"
       >
         {initial ? 'Save' : 'Add'}
       </button>
-      {error && <p className="col-span-full text-xs text-red-600">{error}</p>}
+      {error && <p className="col-span-full text-xs text-negative">{error}</p>}
     </form>
   );
 }

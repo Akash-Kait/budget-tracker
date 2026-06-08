@@ -35,15 +35,13 @@ export function ConvertForm({ itemId, defaultAmount }: { itemId: string; default
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs text-purple-600 hover:underline"
-      >
+      <button onClick={() => setOpen(true)} className="text-xs text-accent hover:underline">
         Convert to Goal
       </button>
     );
   }
-  const input = 'rounded border border-gray-300 px-2 py-1 text-sm';
+  const input =
+    'rounded border border-hairline bg-surface-2 px-2 py-1 text-sm text-text placeholder:text-faint outline-none focus:border-accent focus:ring-2 focus:ring-accent-weak';
   return (
     <form onSubmit={submit} className="mt-2 flex flex-wrap items-center gap-2">
       <input
@@ -70,17 +68,17 @@ export function ConvertForm({ itemId, defaultAmount }: { itemId: string; default
           </option>
         ))}
       </select>
-      <button className="rounded bg-purple-600 px-3 py-1 text-sm font-medium text-white hover:bg-purple-700">
+      <button className="rounded bg-accent px-3 py-1 text-sm font-medium text-bg transition-opacity hover:opacity-90">
         Convert
       </button>
       <button
         type="button"
         onClick={() => setOpen(false)}
-        className="text-xs text-gray-500 hover:underline"
+        className="text-xs text-faint hover:text-text"
       >
         Cancel
       </button>
-      {error && <p className="w-full text-xs text-red-600">{error}</p>}
+      {error && <p className="w-full text-xs text-negative">{error}</p>}
     </form>
   );
 }

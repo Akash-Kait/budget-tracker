@@ -9,13 +9,6 @@ import { formatMonth } from '@/lib/format';
 import { fundingProgress } from '@/lib/finance';
 import type { Item } from '@/lib/types';
 
-const badge: Record<string, string> = {
-  COMMITMENT: 'bg-red-100 text-red-700',
-  GOAL: 'bg-purple-100 text-purple-700',
-  EXPERIENCE: 'bg-blue-100 text-blue-700',
-  WISHLIST: 'bg-gray-100 text-gray-700',
-};
-
 interface Props {
   item: Item;
   remaining: number;
@@ -40,11 +33,11 @@ export function EditableItemRow({ item, remaining, projectedIso, behindMonths }:
 
   if (editing) {
     return (
-      <div className="border-b border-gray-100 py-3 last:border-0">
+      <div className="border-b border-hairline py-3 last:border-0">
         <ItemForm initial={item} onDone={() => setEditing(false)} />
         <button
           onClick={() => setEditing(false)}
-          className="mt-2 text-xs text-gray-500 hover:underline"
+          className="mt-2 text-xs text-faint hover:text-text"
         >
           Cancel
         </button>
@@ -53,24 +46,24 @@ export function EditableItemRow({ item, remaining, projectedIso, behindMonths }:
   }
 
   return (
-    <div className="border-b border-gray-100 py-3 last:border-0">
+    <div className="border-b border-hairline py-3 last:border-0">
       <div className="flex items-center gap-4">
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${badge[item.type]}`}>
+        <span className="rounded bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">
           {item.type}
         </span>
         <div className="w-40">
-          <p className="font-medium">{item.title}</p>
-          <p className="text-xs text-gray-500">
+          <p className="font-medium text-text">{item.title}</p>
+          <p className="text-xs text-muted">
             P{item.priority}
             {item.dueDate ? ` · due ${formatMonth(item.dueDate)}` : ''}
           </p>
         </div>
         <div className="flex-1">
           <ProgressBar pct={pct} />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-muted">
             <Money amount={item.fundedAmount} /> / <Money amount={item.amount} /> ·{' '}
             {overFundedBy > 0 ? (
-              <span className="text-amber-600">
+              <span className="text-warning">
                 over-funded by <Money amount={overFundedBy} />
               </span>
             ) : (
@@ -79,29 +72,29 @@ export function EditableItemRow({ item, remaining, projectedIso, behindMonths }:
               </>
             )}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted">
             {projectedIso ? (
               <>
                 Projected: {formatMonth(projectedIso)}
                 {behindMonths && behindMonths > 0 ? (
-                  <span className="text-amber-600"> · ⚠ behind by {behindMonths} mo</span>
+                  <span className="text-warning"> · ⚠ behind by {behindMonths} mo</span>
                 ) : (
-                  <span className="text-green-600"> · on track</span>
+                  <span className="text-accent"> · on track</span>
                 )}
               </>
             ) : (
-              <span className="text-gray-400">Projected: not on current plan</span>
+              <span className="text-faint">Projected: not on current plan</span>
             )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 text-xs">
-          <button onClick={() => setEditing(true)} className="text-blue-600 hover:underline">
+          <button onClick={() => setEditing(true)} className="text-muted hover:text-accent">
             Edit
           </button>
-          <button onClick={complete} className="text-green-600 hover:underline">
+          <button onClick={complete} className="text-muted hover:text-accent">
             Complete
           </button>
-          <button onClick={del} className="text-red-500 hover:underline">
+          <button onClick={del} className="text-muted hover:text-negative">
             Delete
           </button>
         </div>

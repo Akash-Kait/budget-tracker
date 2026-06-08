@@ -63,7 +63,7 @@ export function Dashboard({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-text">Dashboard</h1>
       <KpiCards
         reservePct={reservePct}
         futureFunding={liability.total}
@@ -73,12 +73,12 @@ export function Dashboard({
       />
       <Link
         href="/wealth"
-        className="flex items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white px-5 py-3 text-sm hover:border-gray-400"
+        className="flex items-center justify-between rounded-2xl border border-dashed border-hairline bg-surface px-5 py-3 text-sm transition-colors hover:border-hairline-strong"
       >
-        <span className="text-gray-500">
-          Total Wealth <span className="text-gray-400">(tracked separately — not part of planning)</span>
+        <span className="text-muted">
+          Total Wealth <span className="text-faint">(tracked separately — not part of planning)</span>
         </span>
-        <span className="font-bold text-gray-900">
+        <span className="font-mono font-semibold tabular-nums text-text">
           <Money amount={totalWealth} /> →
         </span>
       </Link>

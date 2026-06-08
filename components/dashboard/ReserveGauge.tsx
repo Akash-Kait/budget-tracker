@@ -1,9 +1,10 @@
 import { Money } from '@/components/Money';
 
+// Generic status (not gain/loss): healthy = brand accent, mid = warning, low = negative.
 function color(pct: number): string {
-  if (pct >= 90) return '#10b981';
-  if (pct >= 70) return '#f59e0b';
-  return '#ef4444';
+  if (pct >= 90) return 'var(--accent)';
+  if (pct >= 70) return 'var(--warning)';
+  return 'var(--negative)';
 }
 
 export function ReserveGauge({
@@ -23,7 +24,7 @@ export function ReserveGauge({
   return (
     <div className="flex flex-col items-center">
       <svg width="180" height="180" viewBox="0 0 180 180">
-        <circle cx="90" cy="90" r={r} fill="none" stroke="#e5e7eb" strokeWidth="14" />
+        <circle cx="90" cy="90" r={r} fill="none" stroke="var(--hairline)" strokeWidth="14" />
         <circle
           cx="90"
           cy="90"
@@ -35,17 +36,17 @@ export function ReserveGauge({
           strokeDasharray={`${dash} ${circ}`}
           transform="rotate(-90 90 90)"
         />
-        <text x="90" y="84" textAnchor="middle" className="fill-gray-900" fontSize="28" fontWeight="700">
+        <text x="90" y="84" textAnchor="middle" fill="var(--text)" fontSize="28" fontWeight="700">
           {pct}%
         </text>
-        <text x="90" y="106" textAnchor="middle" className="fill-gray-500" fontSize="11">
+        <text x="90" y="106" textAnchor="middle" fill="var(--faint)" fontSize="11">
           healthy ≥ 90%
         </text>
       </svg>
-      <p className="mt-2 text-sm text-gray-600">
+      <p className="mt-2 text-sm text-muted">
         <Money amount={current} /> / <Money amount={target} />
       </p>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-faint">
         Recovery: {recoveryMonths === null ? '—' : `${recoveryMonths.toFixed(1)} months`}
       </p>
     </div>
