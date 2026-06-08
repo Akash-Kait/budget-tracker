@@ -43,6 +43,16 @@ export interface ProjectOpts {
  * Each month: add surplus to pool, refill Opportunity Reserve to target first,
  * then fund queue items (priority desc, due asc), skipping wishlist/completed/purchased.
  */
+/**
+ * Round a money amount to whole paise. Money is stored as Float, and the projection
+ * engines accumulate `+=` over up to 120 iterations, so without rounding a value can
+ * land at e.g. 99999.99999997 and fail a `funded >= amount` check by an epsilon —
+ * pushing an item's completion month out by one and flipping "on track" ↔ "behind".
+ */
+export function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export function projectFunding(p: Profile, items: Item[], opts: ProjectOpts): ProjectionResult {
   const surplus = Math.max(0, monthlySurplus(p));
   const horizon = opts.horizon ?? 120;
@@ -68,8 +78,8 @@ export function projectFunding(p: Profile, items: Item[], opts: ProjectOpts): Pr
     if (reserve < p.reserveTarget) {
       const need = p.reserveTarget - reserve;
       const add = Math.min(need, pool);
-      reserve += add;
-      pool -= add;
+      reserve = roundMoney(reserve + add);
+      pool = roundMoney(pool - add);
     }
 
     // 2. fund items in priority order
@@ -82,8 +92,8 @@ export function projectFunding(p: Profile, items: Item[], opts: ProjectOpts): Pr
         continue;
       }
       const add = Math.min(need, pool);
-      funded[it.id] += add;
-      pool -= add;
+      funded[it.id] = roundMoney(funded[it.id] + add);
+      pool = roundMoney(pool - add);
       if (funded[it.id] >= it.amount) completionMonth[it.id] = month;
     }
 
@@ -98,6 +108,8 @@ export interface GoalImpact {
   baselineMonth: number | null;
   newMonth: number | null;
   delayMonths: number;
+  /** True when the goal was fundable within the horizon before the purchase but not after. */
+  nowUnfundable: boolean;
 }
 
 export interface SimulationResult {
@@ -107,15 +119,42 @@ export interface SimulationResult {
   reductionPct: number;
   monthsToRestore: number | null;
   goalImpacts: GoalImpact[];
+  /** Titles of dated commitments/goals/experiences the purchase newly pushes past their due date. */
   underfunded: string[];
   recommendation: Recommendation;
   message: string;
 }
 
-export function simulatePurchase(p: Profile, items: Item[], cost: number): SimulationResult {
+/** Returns the set of dated, active, non-wishlist item ids whose projected completion misses their due date. */
+function dueDateBreaches(
+  items: Item[],
+  proj: ProjectionResult,
+  nowIso: string,
+): Set<string> {
+  const breaches = new Set<string>();
+  for (const it of items) {
+    if (it.type === 'WISHLIST' || !it.dueDate || !isActive(it)) continue;
+    const idx = proj.completionMonth[it.id];
+    if (idx === undefined) {
+      breaches.add(it.id); // unfundable within the horizon
+      continue;
+    }
+    const due = new Date(it.dueDate);
+    const dueMonth = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), 1));
+    if (monthsBetween(dueMonth, addMonths(nowIso, idx)) > 0) breaches.add(it.id);
+  }
+  return breaches;
+}
+
+export function simulatePurchase(
+  p: Profile,
+  items: Item[],
+  cost: number,
+  nowIso: string = new Date().toISOString(),
+): SimulationResult {
   const surplus = monthlySurplus(p);
   const reserveBefore = p.reserveCurrent;
-  const reserveAfter = reserveBefore - cost;
+  const reserveAfter = roundMoney(reserveBefore - cost);
   const reductionPct = reserveBefore > 0 ? (cost / reserveBefore) * 100 : 100;
 
   // months to restore reserve to target from the post-purchase level
@@ -130,35 +169,35 @@ export function simulatePurchase(p: Profile, items: Item[], cost: number): Simul
   const after = projectFunding(p, items, { startReserve: reserveAfter });
 
   const goalImpacts: GoalImpact[] = items
-    .filter((i) => i.type === 'GOAL')
+    .filter((i) => i.type === 'GOAL' && isActive(i))
     .map((g) => {
       const b = baseline.completionMonth[g.id] ?? null;
       const n = after.completionMonth[g.id] ?? null;
-      const delay =
-        b !== null && n !== null
-          ? Math.max(0, n - b)
-          : b === null && n === null
-            ? 0
-            : 999;
-      return { title: g.title, baselineMonth: b, newMonth: n, delayMonths: delay };
+      const nowUnfundable = b !== null && n === null;
+      const delayMonths = b !== null && n !== null ? Math.max(0, n - b) : 0;
+      return { title: g.title, baselineMonth: b, newMonth: n, delayMonths, nowUnfundable };
     });
 
-  // commitments/experiences with due dates that the projection can't fund within the horizon
-  const underfunded: string[] = [];
-  for (const it of items) {
-    if (it.type === 'WISHLIST' || !it.dueDate) continue;
-    const completeMonth = after.completionMonth[it.id];
-    if (completeMonth === undefined) underfunded.push(it.title);
-  }
+  // Dated commitments/goals/experiences the purchase NEWLY pushes past their due date
+  // (breached after the purchase but not before — so we attribute the breach to the purchase).
+  const baselineBreaches = dueDateBreaches(items, baseline, nowIso);
+  const afterBreaches = dueDateBreaches(items, after, nowIso);
+  const underfunded = items
+    .filter((i) => afterBreaches.has(i.id) && !baselineBreaches.has(i.id))
+    .map((i) => i.title);
 
   let recommendation: Recommendation = 'SAFE';
-  if (reserveAfter < 0 || goalImpacts.some((g) => g.delayMonths > 0)) {
+  if (
+    reserveAfter < 0 ||
+    goalImpacts.some((g) => g.delayMonths > 0 || g.nowUnfundable) ||
+    underfunded.length > 0
+  ) {
     recommendation = 'WAIT';
   } else if (reductionPct > 10) {
     recommendation = 'CAUTION';
   }
 
-  const message = buildMessage(reductionPct, goalImpacts, recommendation, reserveAfter);
+  const message = buildMessage(reductionPct, goalImpacts, underfunded, recommendation, reserveAfter);
   return {
     cost,
     reserveBefore,
@@ -223,18 +262,18 @@ export function projectMonthlyAllocation(
 
     if (pool > 0 && reserve < p.reserveTarget) {
       const add = Math.min(p.reserveTarget - reserve, pool);
-      reserve += add;
-      pool -= add;
-      entry.reserve = add;
+      reserve = roundMoney(reserve + add);
+      pool = roundMoney(pool - add);
+      entry.reserve = roundMoney(add);
     }
     for (const it of fundable) {
       if (pool <= 0) break;
       const need = it.amount - funded[it.id];
       if (need <= 0) continue;
       const add = Math.min(need, pool);
-      funded[it.id] += add;
-      pool -= add;
-      entry.items.push({ id: it.id, title: it.title, amount: add });
+      funded[it.id] = roundMoney(funded[it.id] + add);
+      pool = roundMoney(pool - add);
+      entry.items.push({ id: it.id, title: it.title, amount: roundMoney(add) });
     }
     out.push(entry);
   }
@@ -309,18 +348,29 @@ export function projectedCompletion(
 function buildMessage(
   reductionPct: number,
   goalImpacts: GoalImpact[],
+  underfunded: string[],
   rec: Recommendation,
   reserveAfter: number,
 ): string {
   if (reserveAfter < 0) {
     return `This purchase exceeds your Opportunity Reserve. Recommendation: Wait.`;
   }
+  const clauses: string[] = [];
+  if (underfunded.length > 0) {
+    clauses.push(`pushes ${underfunded.join(', ')} past ${underfunded.length > 1 ? 'their' : 'its'} due date`);
+  }
+  const unfundable = goalImpacts.filter((g) => g.nowUnfundable).map((g) => g.title);
+  if (unfundable.length > 0) {
+    clauses.push(`leaves ${unfundable.join(', ')} unfundable within the 10-year horizon`);
+  }
   const delayed = goalImpacts.filter((g) => g.delayMonths > 0);
   if (delayed.length > 0) {
-    const parts = delayed.map(
-      (g) => `${g.title} by ${g.delayMonths} month${g.delayMonths > 1 ? 's' : ''}`,
+    clauses.push(
+      `delays ${delayed.map((g) => `${g.title} by ${g.delayMonths} month${g.delayMonths > 1 ? 's' : ''}`).join(', ')}`,
     );
-    return `This delays ${parts.join(', ')}. Recommendation: Wait.`;
+  }
+  if (clauses.length > 0) {
+    return `This ${clauses.join('; ')}. Recommendation: Wait.`;
   }
   if (rec === 'CAUTION') {
     return `This reduces your reserve by ${reductionPct.toFixed(1)}%. No goal impact, but it's a sizable draw. Recommendation: Proceed with caution.`;

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { roundMoney } from '@/lib/finance';
 import type { Item, Profile } from '@/lib/types';
 
 export async function getProfile(): Promise<Profile> {
@@ -23,7 +24,7 @@ export async function getItems(): Promise<Item[]> {
     type: r.type as Item['type'],
     title: r.title,
     amount: r.amount,
-    fundedAmount: r.fundings.reduce((s, f) => s + f.amount, 0),
+    fundedAmount: roundMoney(r.fundings.reduce((s, f) => s + f.amount, 0)),
     priority: r.priority,
     rank: r.rank,
     dueDate: r.dueDate ? r.dueDate.toISOString() : null,

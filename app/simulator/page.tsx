@@ -3,19 +3,9 @@ import { useState } from 'react';
 import { Card } from '@/components/Card';
 import { Money } from '@/components/Money';
 import { RecommendationBanner } from '@/components/RecommendationBanner';
-import type { Recommendation } from '@/lib/types';
+import type { SimulationResult } from '@/lib/finance';
 
-interface SimResult {
-  name: string | null;
-  cost: number;
-  reserveBefore: number;
-  reserveAfter: number;
-  reductionPct: number;
-  monthsToRestore: number | null;
-  goalImpacts: { title: string; delayMonths: number }[];
-  recommendation: Recommendation;
-  message: string;
-}
+type SimResult = SimulationResult & { name: string | null };
 
 export default function SimulatorPage() {
   const [name, setName] = useState('');
@@ -100,13 +90,23 @@ export default function SimulatorPage() {
               {result.goalImpacts.map((g) => (
                 <p key={g.title} className="text-sm">
                   {g.title}:{' '}
-                  {g.delayMonths > 0 ? (
+                  {g.nowUnfundable ? (
+                    <span className="text-red-600">no longer fundable within 10 years</span>
+                  ) : g.delayMonths > 0 ? (
                     <span className="text-red-600">delayed {g.delayMonths} month(s)</span>
                   ) : (
                     <span className="text-green-600">no impact</span>
                   )}
                 </p>
               ))}
+            </Card>
+          )}
+          {result.underfunded.length > 0 && (
+            <Card title="Pushed past due date">
+              <p className="text-sm text-red-600">{result.underfunded.join(', ')}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                This purchase delays funding enough that these dated items miss their target date.
+              </p>
             </Card>
           )}
         </div>

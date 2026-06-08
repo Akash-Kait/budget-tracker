@@ -163,6 +163,27 @@ describe('simulatePurchase', () => {
     const r = simulatePurchase(p, goals, 50000);
     expect(r.monthsToRestore).toBeNull();
   });
+
+  it('flags a commitment newly pushed past its due date and recommends WAIT', () => {
+    const now = '2026-06-01T00:00:00.000Z';
+    // Trip due in 6 months. Baseline funds it by ~month 4 (on time); a big purchase
+    // drains the reserve so refill pushes funding past the due date.
+    const trip = item({
+      id: 'trip', title: 'Trip', type: 'COMMITMENT', priority: 5,
+      amount: 100000, fundedAmount: 0, dueDate: '2026-12-01T00:00:00.000Z',
+    });
+    const safe = simulatePurchase({ ...profile }, [trip], 5000, now);
+    expect(safe.underfunded).toEqual([]); // small purchase doesn't breach
+    const wait = simulatePurchase({ ...profile }, [trip], 200000, now);
+    expect(wait.underfunded).toContain('Trip');
+    expect(wait.recommendation).toBe('WAIT');
+  });
+
+  it('marks a goal nowUnfundable instead of using a 999 sentinel', () => {
+    const r = simulatePurchase({ ...profile }, goals, 5400);
+    expect(r.goalImpacts.every((g) => g.nowUnfundable === false)).toBe(true);
+    expect(r.goalImpacts.every((g) => g.delayMonths !== 999)).toBe(true);
+  });
 });
 
 describe('remaining', () => {
