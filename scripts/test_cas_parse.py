@@ -74,6 +74,22 @@ def test_empty_and_missing_folios():
     assert map_cas({"folios": None})["schemes"] == []
 
 
+def test_accepts_casparser_object_not_just_dict():
+    # casparser 0.7+ returns a CASData object (pydantic) — map_cas must coerce via model_dump,
+    # not assume a dict. Simulate that object shape.
+    class FakeCasData:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def model_dump(self):
+            return self._payload
+
+    payload = {"statement_period": {"to": "2025-05-31"}, "folios": [folio("F1", scheme())]}
+    out = map_cas(FakeCasData(payload))
+    assert out["statementDate"] == "2025-05-31"
+    assert len(out["schemes"]) == 1 and out["schemes"][0]["amfi"] == "100001"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for t in tests:

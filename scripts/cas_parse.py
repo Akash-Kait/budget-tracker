@@ -110,6 +110,28 @@ def _iso_date(v):
     return iso() if callable(iso) else str(v)
 
 
+def _as_dict(data):
+    """casparser returns a plain dict on older versions but a pydantic/dataclass object on 0.7+.
+    Normalize to the nested dict shape map_cas reads, so `.get(...)` never AttributeErrors on a
+    perfectly valid parse."""
+    if isinstance(data, dict):
+        return data
+    for attr in ("model_dump", "dict"):  # pydantic v2 / v1
+        fn = getattr(data, attr, None)
+        if callable(fn):
+            try:
+                return fn()
+            except Exception:  # noqa: BLE001
+                pass
+    try:
+        import dataclasses
+        if dataclasses.is_dataclass(data):
+            return dataclasses.asdict(data)
+    except Exception:  # noqa: BLE001
+        pass
+    return data  # last resort — map_cas's .get will fail and surface map_error
+
+
 def map_cas(data: dict) -> dict:
     """Pure casparser-dict → trimmed app JSON. Extracted so it's unit-testable without casparser.
 
@@ -118,7 +140,9 @@ def map_cas(data: dict) -> dict:
       portfolio and a 0 could overwrite a real holding's units.
     - Derives NAV from value/units when the statement gives a value but no NAV (avoids a phantom ₹0).
     - Reads cost (invested amount) from the several places casparser has placed it across versions.
+    - Accepts casparser's dict OR its CASData object (pydantic/dataclass on 0.7+).
     """
+    data = _as_dict(data)
     schemes = []
     for folio in data.get("folios", []) or []:
         folio_no = folio.get("folio")
