@@ -26,17 +26,27 @@ export class CasError extends Error {
   }
 }
 
-// Map the sidecar's structured exit codes to typed errors.
-function fromExit(code: number | null): CasError {
+// Map the sidecar's structured exit codes to typed errors. `out` is the script's stdout, which on a
+// handled failure carries a PII-free `{"error","detail"}` (detail = an exception CLASS NAME) — we
+// append it so the cause is visible in the UI/logs instead of an opaque "could not parse".
+function fromExit(code: number | null, out = ''): CasError {
+  let detail = '';
+  try {
+    const line = out.trim().split('\n').filter(Boolean).pop() ?? '';
+    const j = JSON.parse(line) as { detail?: unknown };
+    if (typeof j.detail === 'string' && j.detail) detail = ` (${j.detail})`;
+  } catch {
+    /* no structured detail — leave it off */
+  }
   switch (code) {
     case 4:
       return new CasError('CASPARSER_MISSING', 'casparser is not installed');
     case 2:
       return new CasError('BAD_PASSWORD', 'Incorrect password or unrecognized CAS');
     case 3:
-      return new CasError('PARSE_ERROR', 'Could not parse the CAS PDF');
+      return new CasError('PARSE_ERROR', `Could not parse the CAS PDF${detail}`);
     default:
-      return new CasError('PARSE_ERROR', `CAS parser exited with code ${code}`);
+      return new CasError('PARSE_ERROR', `CAS parser exited with code ${code}${detail}`);
   }
 }
 
@@ -73,7 +83,7 @@ export function runCasParser(pdf: Buffer, password: string): Promise<CasParsed> 
 
     child.on('close', (code) => {
       done(() => {
-        if (code !== 0) return reject(fromExit(code));
+        if (code !== 0) return reject(fromExit(code, out));
         let json: unknown;
         try {
           json = JSON.parse(out);

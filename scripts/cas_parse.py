@@ -23,9 +23,13 @@ import sys
 import tempfile
 
 
-def fail(code: int, error: str) -> None:
-    # Structured, PII-free signal for the Node caller; details go to stderr (not returned).
-    print(json.dumps({"error": error}))
+def fail(code: int, error: str, detail: str = "") -> None:
+    # Structured, PII-free signal for the Node caller. `detail` is an exception CLASS NAME only
+    # (never the message/content), safe to surface for diagnosis.
+    payload = {"error": error}
+    if detail:
+        payload["detail"] = detail
+    print(json.dumps(payload))
     sys.exit(code)
 
 
@@ -72,14 +76,18 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001 - normalise to structured exits
         name = type(exc).__name__
         if IncorrectPasswordError is not None and isinstance(exc, IncorrectPasswordError):
-            sys.stderr.write("incorrect password\n")
-            fail(2, "bad_password")
+            fail(2, "bad_password", detail=name)
         if "password" in str(exc).lower():
-            fail(2, "bad_password")
+            fail(2, "bad_password", detail=name)
         sys.stderr.write(f"parse failed: {name}\n")
-        fail(3, "parse_error")
+        fail(3, "parse_error", detail=name)
 
-    print(json.dumps(map_cas(data)))
+    try:
+        result = map_cas(data)
+    except Exception as exc:  # noqa: BLE001 - map_cas shape mismatch shouldn't 500 opaquely
+        # e.g. casparser returned an object, not a dict — surface the class so we can fix the mapping.
+        fail(3, "map_error", detail=type(exc).__name__)
+    print(json.dumps(result))
     sys.exit(0)
 
 
