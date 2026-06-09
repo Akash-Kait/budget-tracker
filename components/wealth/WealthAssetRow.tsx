@@ -5,10 +5,11 @@ import { Money } from '@/components/Money';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { GainLossText } from '@/components/wealth/GainLossText';
 import { assetValue, assetGainLoss } from '@/lib/wealth';
-import { formatMonth } from '@/lib/format';
+import { formatDay } from '@/lib/format';
 import type { WealthAsset } from '@/lib/types';
 
-export function WealthAssetRow({ asset }: { asset: WealthAsset }) {
+// `stale` is computed on the server (price freshness lives in the market boundary, not here).
+export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; stale?: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
 
@@ -32,26 +33,52 @@ export function WealthAssetRow({ asset }: { asset: WealthAsset }) {
       : 'Manual value';
 
   return (
-    <div className="grid grid-cols-2 items-center gap-x-3 gap-y-1 border-b border-hairline py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_150px_150px_110px] sm:gap-y-0">
-      {/* Asset */}
-      <div className="col-span-2 sm:col-span-1">
-        <span className="font-medium text-text">{asset.name}</span>
-        {asset.ticker && (
-          <span className="ml-2 rounded border border-hairline px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted">
-            {asset.ticker}
+    <div className="grid grid-cols-2 items-center gap-x-3 gap-y-1 border-b border-hairline py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_130px_180px_130px] sm:gap-y-0">
+      {/* Asset — name + ticker + status badge wrap together; resolved-fund echo on its own line */}
+      <div className="col-span-2 min-w-0 sm:col-span-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-medium text-text">{asset.name}</span>
+          {asset.ticker && (
+            <span className="rounded border border-hairline px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted">
+              {asset.ticker}
+            </span>
+          )}
+          {asset.priceStatus === 'NOT_FOUND' && (
+            <span
+              title="This scheme code wasn't found in the NAV feed on the last refresh. Edit the asset to fix it."
+              className="rounded border border-warning/40 bg-warning-weak px-1.5 py-0.5 text-[10px] font-medium text-warning"
+            >
+              scheme code didn’t resolve
+            </span>
+          )}
+        </div>
+        {asset.tickerName && (
+          // Echo the provider-resolved scheme name so a wrong-but-valid code is visible.
+          <span className="mt-0.5 block truncate text-[11px] leading-tight text-faint">
+            ↳ {asset.tickerName}
           </span>
         )}
       </div>
       {/* Holding */}
-      <span className="font-mono text-xs tabular-nums text-muted">{holding}</span>
-      {/* Price as-of */}
-      <span className="text-xs text-faint">
-        {asset.priceUpdatedAt
-          ? `${asset.priceSource === 'API' ? 'Live' : 'Manual'} · ${formatMonth(asset.priceUpdatedAt)}`
-          : ''}
+      <span className="min-w-0 truncate font-mono text-xs tabular-nums text-muted">{holding}</span>
+      {/* Price as-of — AMFI NAV is end-of-day, never live; wraps within its own column */}
+      <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-tight text-faint">
+        {asset.priceUpdatedAt &&
+          (asset.priceSource === 'API'
+            ? `NAV as of ${formatDay(asset.priceUpdatedAt)} · end of day`
+            : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
+        {stale && (
+          <span
+            title="This NAV is older than expected — the feed may not have updated for this scheme."
+            className="rounded bg-warning-weak px-1.5 py-0.5 text-[10px] font-medium text-warning"
+          >
+            stale
+          </span>
+        )}
       </span>
-      {/* Value + gain/loss + actions */}
-      <div className="col-span-2 flex items-center justify-between sm:col-span-1 sm:justify-end sm:gap-4">
+      {/* Value + gain/loss + actions — stacked & right-aligned on desktop so it never crowds the
+          as-of column regardless of ₹ magnitude; inline (value left / actions right) on mobile */}
+      <div className="col-span-2 flex items-center justify-between sm:col-span-1 sm:flex-col sm:items-end sm:justify-center sm:gap-1">
         <div className="sm:text-right">
           <div className="font-mono text-sm font-medium tabular-nums text-text">
             <Money amount={assetValue(asset)} />

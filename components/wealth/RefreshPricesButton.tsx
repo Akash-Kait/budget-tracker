@@ -17,11 +17,17 @@ export function RefreshPricesButton() {
       return;
     }
     const data = await res.json();
-    setMsg(
-      data.provider === 'manual'
-        ? 'Manual mode — connect a market-data provider for live prices.'
-        : `Updated ${data.updated} of ${data.checked} tickers.`,
-    );
+    if (data.provider === 'manual') {
+      setMsg('Manual mode — set MARKET_DATA_PROVIDER=amfi for live mutual-fund NAVs.');
+    } else if (data.checked === 0) {
+      setMsg('No mutual funds with a scheme code to refresh.');
+    } else {
+      const parts = [`Updated ${data.updated}/${data.checked}`];
+      if (data.stale?.length) parts.push(`${data.stale.length} stale`);
+      if (data.notFound?.length)
+        parts.push(`couldn’t update: ${data.notFound.join(', ')}`);
+      setMsg(parts.join(' · '));
+    }
     router.refresh();
   }
 

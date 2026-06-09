@@ -26,6 +26,8 @@ vi.mock('@/lib/data', () => ({
   getWealthAssets: vi.fn(),
   getFundings: vi.fn(),
 }));
+// Mock the provider seam so refresh tests drive the state machine without any network/feed.
+vi.mock('@/lib/market/provider', () => ({ getPriceProvider: vi.fn() }));
 
 import { prisma } from '@/lib/db';
 import { getProfile, getItems } from '@/lib/data';
@@ -36,6 +38,8 @@ import { GET as itemGET, PUT as itemPUT, DELETE as itemDELETE } from '@/app/api/
 import { POST as fundingPOST } from '@/app/api/items/[id]/funding/route';
 import { GET as wealthGET, POST as wealthPOST } from '@/app/api/wealth/route';
 import { PUT as wealthPUT, DELETE as wealthDELETE } from '@/app/api/wealth/[id]/route';
+import { POST as refreshPOST } from '@/app/api/wealth/refresh-prices/route';
+import { getPriceProvider } from '@/lib/market/provider';
 
 const m = prisma as unknown as Record<string, Record<string, Mock>> & { $transaction: Mock };
 const knownErr = (code: string) =>
@@ -265,5 +269,116 @@ describe('wealth [id] route', () => {
   it('DELETE missing throws P2025 → 404', async () => {
     m.wealthAsset.delete.mockRejectedValue(knownErr('P2025'));
     expect((await wealthDELETE(jsonReq('DELETE'), ctx('gone'))).status).toBe(404);
+  });
+});
+
+describe('wealth refresh-prices route (state machine)', () => {
+  const provider = getPriceProvider as Mock;
+
+  // The route wraps all per-asset writes in prisma.$transaction(cb); run the callback with the
+  // mocked prisma so tx.wealthAsset.update routes to the same mock.
+  beforeEach(() => {
+    m.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => unknown) => cb(prisma));
+  });
+
+  it('feed unreachable (getQuotes throws) → 500 and NO price write (fail safe)', async () => {
+    m.wealthAsset.findMany.mockResolvedValue([
+      { id: '1', name: 'Fund A', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
+    ]);
+    provider.mockReturnValue({
+      name: 'amfi',
+      getQuote: vi.fn(),
+      getQuotes: vi.fn().mockRejectedValue(new Error('SECRET feed down')),
+    });
+    await expect500NoLeak(await refreshPOST());
+    expect(m.wealthAsset.update).not.toHaveBeenCalled();
+  });
+
+  it('mixed: found → priced; not-found → untouched price + persisted NOT_FOUND; stale flagged', async () => {
+    const old = '2025-05-14T00:00:00.000Z'; // far in the past → stale
+    m.wealthAsset.findMany.mockResolvedValue([
+      { id: '1', name: 'Found Fresh', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
+      { id: '2', name: 'Missing', type: 'MUTUAL_FUND', ticker: '999999', priceStatus: null },
+      { id: '3', name: 'Found Stale', type: 'MUTUAL_FUND', ticker: '100002', priceStatus: null },
+    ]);
+    provider.mockReturnValue({
+      name: 'amfi',
+      getQuote: vi.fn(),
+      getQuotes: vi.fn().mockResolvedValue(
+        new Map<string, { price: number; asOf: string; name?: string } | null>([
+          ['100001', { price: 123.45, asOf: new Date().toISOString(), name: 'HDFC Flexi Cap' }],
+          ['999999', null],
+          ['100002', { price: 50, asOf: old }],
+        ]),
+      ),
+    });
+    m.wealthAsset.update.mockResolvedValue({});
+
+    const res = await refreshPOST();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.updated).toBe(2);
+    expect(body.notFound).toEqual(['Missing']);
+    expect(body.stale).toEqual(['Found Stale']);
+
+    // Found asset: full price write incl. priceSource API + priceStatus OK + resolved tickerName;
+    // never zeroed.
+    expect(m.wealthAsset.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: expect.objectContaining({
+        pricePerUnit: 123.45,
+        priceSource: 'API',
+        priceStatus: 'OK',
+        tickerName: 'HDFC Flexi Cap',
+      }),
+    });
+    // Not-found asset: ONLY priceStatus is written — price left untouched.
+    expect(m.wealthAsset.update).toHaveBeenCalledWith({
+      where: { id: '2' },
+      data: { priceStatus: 'NOT_FOUND' },
+    });
+  });
+
+  it('manual provider (no getQuotes) → true no-op: nothing checked, marked, or written', async () => {
+    provider.mockReturnValue({ name: 'manual', getQuote: vi.fn().mockResolvedValue(null) });
+    const res = await refreshPOST();
+    const body = await res.json();
+    expect(body).toEqual({ provider: 'manual', checked: 0, updated: 0, stale: [], notFound: [] });
+    expect(m.wealthAsset.findMany).not.toHaveBeenCalled();
+    expect(m.wealthAsset.update).not.toHaveBeenCalled();
+  });
+
+  it('no mutual funds with a ticker → checked 0, no provider fetch', async () => {
+    m.wealthAsset.findMany.mockResolvedValue([]);
+    const getQuotes = vi.fn();
+    provider.mockReturnValue({ name: 'amfi', getQuote: vi.fn(), getQuotes });
+    const res = await refreshPOST();
+    expect((await res.json()).checked).toBe(0);
+    expect(getQuotes).not.toHaveBeenCalled();
+  });
+
+  it('mid-loop update failure → 500 inside a transaction (so "nothing changed" is true)', async () => {
+    m.wealthAsset.findMany.mockResolvedValue([
+      { id: '1', name: 'A', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
+      { id: '2', name: 'B', type: 'MUTUAL_FUND', ticker: '100002', priceStatus: null },
+    ]);
+    provider.mockReturnValue({
+      name: 'amfi',
+      getQuote: vi.fn(),
+      getQuotes: vi.fn().mockResolvedValue(
+        new Map<string, { price: number; asOf: string } | null>([
+          ['100001', { price: 10, asOf: new Date().toISOString() }],
+          ['100002', { price: 20, asOf: new Date().toISOString() }],
+        ]),
+      ),
+    });
+    // First asset writes fine; the second rejects mid-loop.
+    m.wealthAsset.update
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('SECRET db locked'));
+
+    await expect500NoLeak(await refreshPOST());
+    // The writes were wrapped in $transaction, so on a real DB the first write rolls back too.
+    expect(m.$transaction).toHaveBeenCalled();
   });
 });

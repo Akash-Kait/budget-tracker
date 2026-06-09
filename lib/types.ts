@@ -24,6 +24,11 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
 export const PRICE_SOURCES = ['MANUAL', 'API'] as const;
 export type PriceSource = (typeof PRICE_SOURCES)[number];
 
+// Outcome of the last live-price refresh for an asset. NOT_FOUND = the ticker/scheme code didn't
+// resolve in the feed (a data-entry error to fix); persisted so it survives reloads, unlike a toast.
+export const PRICE_STATUSES = ['OK', 'NOT_FOUND'] as const;
+export type PriceStatus = (typeof PRICE_STATUSES)[number];
+
 export interface WealthAsset {
   id: string;
   name: string;
@@ -35,6 +40,8 @@ export interface WealthAsset {
   lastPrice: number | null;
   priceUpdatedAt: string | null; // ISO
   priceSource: PriceSource | null;
+  priceStatus: PriceStatus | null; // result of last refresh; NOT_FOUND surfaces a fix-me badge
+  tickerName: string | null; // provider-resolved name for `ticker`, shown so a wrong code is visible
   costBasis: number | null; // total amount invested; null = unknown
   purchaseDate: string | null; // ISO
 }

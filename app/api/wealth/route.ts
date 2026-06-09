@@ -26,6 +26,8 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
       // a user-entered unit price is a MANUAL source, stamped now
       priceSource: d.pricePerUnit != null ? 'MANUAL' : null,
       priceUpdatedAt: d.pricePerUnit != null ? new Date() : null,
+      priceStatus: null, // manual entry: no outstanding "couldn't update" state
+      tickerName: null, // resolved name is repopulated on the next live refresh
     },
   });
   return NextResponse.json(created, { status: 201 });

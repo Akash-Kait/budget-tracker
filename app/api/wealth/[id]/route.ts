@@ -23,6 +23,8 @@ export const PUT = withErrorHandling(
         purchaseDate: d.purchaseDate ? new Date(d.purchaseDate) : null,
         priceSource: d.pricePerUnit != null ? 'MANUAL' : null,
         priceUpdatedAt: d.pricePerUnit != null ? new Date() : null,
+        priceStatus: null, // a manual save is the fix for a NOT_FOUND scheme code — clear it
+        tickerName: null, // resolved name is repopulated on the next live refresh
       },
     });
     return NextResponse.json(updated);

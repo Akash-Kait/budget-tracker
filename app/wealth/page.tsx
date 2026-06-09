@@ -6,6 +6,7 @@ import { HeroWealth } from '@/components/wealth/HeroWealth';
 import { AllocationChart } from '@/components/wealth/AllocationChart';
 import { GainLossChart, type GainLossRow } from '@/components/wealth/GainLossChart';
 import { wealthTypeColor } from '@/lib/colors';
+import { isStale } from '@/lib/market/staleness';
 import { getWealthAssets } from '@/lib/data';
 import {
   groupByType,
@@ -21,6 +22,10 @@ export const dynamic = 'force-dynamic';
 
 export default async function WealthPage() {
   const assets = await getWealthAssets();
+  const now = new Date().toISOString();
+  // A live (API) NAV that hasn't refreshed in N business days is stale — flagged in the row.
+  const isAssetStale = (a: (typeof assets)[number]) =>
+    a.priceSource === 'API' && a.priceUpdatedAt != null && isStale(a.priceUpdatedAt, now);
   const total = totalWealth(assets);
   const groups = groupByType(assets);
   const empty = assets.length === 0;
@@ -110,7 +115,7 @@ export default async function WealthPage() {
                 }
               >
                 {g.assets.map((a) => (
-                  <WealthAssetRow key={a.id} asset={a} />
+                  <WealthAssetRow key={a.id} asset={a} stale={isAssetStale(a)} />
                 ))}
               </Panel>
             ))}
