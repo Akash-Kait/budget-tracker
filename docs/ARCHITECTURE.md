@@ -174,9 +174,21 @@ npm install
 npm run db:push      # sync SQLite schema (after pulling schema changes too)
 npm run db:seed      # demo data (Planning items + Wealth assets) — destructive reseed
 npm run dev          # http://localhost:3000
-npm test             # 56 Vitest unit tests
+npm test             # Vitest unit tests
 npm run build        # production build
 ```
+
+**CAS import (optional — mutual-fund auto-populate from a CAMS/KFintech statement)** needs Python:
+
+```bash
+python3 -m venv scripts/.venv
+scripts/.venv/bin/pip install -r scripts/requirements.txt   # casparser, MIT parser only — NO mupdf extra
+```
+
+The `POST /api/wealth/import-cas` route shells out to `scripts/cas_parse.py` (sidecar). Without the
+venv it falls back to `python3`; if neither has `casparser`, the route returns a clear 501 and the
+rest of the app is unaffected. The PDF + password are processed in-memory server-side and never
+stored or logged.
 
 ## 9. Constraints / gotchas (for whoever works on this next)
 

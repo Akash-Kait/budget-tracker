@@ -224,6 +224,38 @@ no PII/secret logging, manual default unaffected. List changed files.
 
 ---
 
+## Deep-review fast-follow backlog (2026-06-09)
+
+12-perspective review ran before commit. Fixed in this change: **P0** older-statement rewind (route
+409 recency guard), **P0** folio-qualified `importKey` (two folios / shared AMFI code no longer
+collide; ISIN now precedes name), **P1** `stdin` EPIPE crash guard, **P1** skip exited/zero-unit
+schemes + derive NAV from value + never null an existing price/qty (parser + reconcile), **P1** cost
+read from multiple casparser keys + a pure `map_cas` with `scripts/test_cas_parse.py`. Deferred (safe
+behind the manual default + intact firewall) — **fold into the next branch touching `lib/cas/`:**
+
+1. **Full subprocess-seam tests** — `cas-route.test.ts` mocks `runCasParser`, so `sidecar.ts` (stdin
+   framing, exit→CasError map, BAD_OUTPUT, ENOENT, TIMEOUT+kill) has no direct coverage. Add a
+   `sidecar.test.ts` driving a fake interpreter stub; assert the spec's privacy item (no PDF/password
+   logged, temp file unlinked).
+2. **Non-MF instrument filter** — a consolidated CAS can carry NPS/ETF/SGB; the parser currently tags
+   every scheme `MUTUAL_FUND`. Gate on `amfi` present or an `INF…` ISIN.
+3. **Ops signal** — broaden the Python `import casparser` catch (non-`ImportError` env breakage →
+   exit 4, not a misleading 422); log `CasError.code` (PII-free) at the route so failures are
+   diagnosable.
+4. **Module-relative script path** — `process.cwd()`-relative `SCRIPT`/`VENV_PY` break under
+   standalone/non-root cwd; resolve via `import.meta.url`. Document CAS import as Node-server-only.
+5. **Result names + preview** — return the reconcile plan (created/updated/flagged *names*, old→new
+   units) so the toast can name flagged funds and a future dry-run/confirm step is cheap.
+6. **`ticker`-less rows never revalue / never flag stale**; **ABSENT** pill tone + still counted in
+   totals + not cleared on manual edit; **`as unknown as` cast → `select` projection**; minimal
+   subprocess `env`; cap stdout; `BAD_OUTPUT`→502 not 422; reconcile/`schema.prisma` comment drift
+   (`priceSource` now MANUAL|API|CAS); `requirements.txt` version-comment; explicit `0600` on the
+   temp file; MIT-parser runtime guard; type `CasUpdate.data`.
+
+(Full report at commit time: `REVIEW.md` — overwritten by each `/review`, hence this backlog lives here.)
+
+---
+
 **Approval requested on:** (1) the **Python `casparser` sidecar** (MIT parser only, no mupdf) as the
 parser, and the **stdin-bytes / password-first-line** invocation (vs temp-file fallback); (2) the
 **reconciliation rules** (match by `importKey` = AMFI-else-folio\|scheme; create/update/flag-absent;

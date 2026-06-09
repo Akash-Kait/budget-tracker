@@ -1,4 +1,5 @@
 import { Panel } from '@/components/wealth/Panel';
+import { CasImportPanel } from '@/components/wealth/CasImportPanel';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
 import { WealthKpiCards } from '@/components/wealth/WealthKpiCards';
@@ -76,8 +77,14 @@ export default async function WealthPage() {
               Add your mutual funds, stocks, or other holdings below to see your allocation and total.
             </p>
           </div>
-          <div className="mt-2 border-t border-hairline pt-5">
-            <WealthAssetForm />
+          <div className="mt-2 space-y-5 border-t border-hairline pt-5">
+            <div>
+              <p className="mb-2 text-[11px] uppercase tracking-wide text-faint">Import from CAS</p>
+              <CasImportPanel />
+            </div>
+            <div className="border-t border-hairline pt-5">
+              <WealthAssetForm />
+            </div>
           </div>
         </Panel>
       ) : (
@@ -120,6 +127,11 @@ export default async function WealthPage() {
               </Panel>
             ))}
           </section>
+
+          {/* Import from CAS — auto-populate/update mutual funds */}
+          <Panel title="Import from CAS">
+            <CasImportPanel />
+          </Panel>
 
           {/* Add — calm */}
           <Panel title="Add asset">

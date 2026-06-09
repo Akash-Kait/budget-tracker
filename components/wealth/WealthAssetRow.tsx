@@ -51,6 +51,14 @@ export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; s
               scheme code didn’t resolve
             </span>
           )}
+          {asset.casStatus === 'ABSENT' && (
+            <span
+              title="This holding wasn't in your most recently imported CAS. It hasn't been deleted — re-import a statement that includes it, or remove it manually."
+              className="rounded border border-warning/40 bg-warning-weak px-1.5 py-0.5 text-[10px] font-medium text-warning"
+            >
+              not in latest CAS
+            </span>
+          )}
         </div>
         {asset.tickerName && (
           // Echo the provider-resolved scheme name so a wrong-but-valid code is visible.
@@ -66,7 +74,9 @@ export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; s
         {asset.priceUpdatedAt &&
           (asset.priceSource === 'API'
             ? `NAV as of ${formatDay(asset.priceUpdatedAt)} · end of day`
-            : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
+            : asset.priceSource === 'CAS'
+              ? `From CAS · ${formatDay(asset.priceUpdatedAt)}`
+              : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
         {stale && (
           <span
             title="This NAV is older than expected — the feed may not have updated for this scheme."

@@ -1,0 +1,5 @@
+# CAS-import sidecar dependency. MIT parser ONLY — do NOT add the [mupdf] extra (GPL/AGPL).
+# Setup (once, isolated from the app's node deps):
+#   python3 -m venv scripts/.venv && scripts/.venv/bin/pip install -r scripts/requirements.txt
+# v0.4.3+ exposes the per-scheme AMFI code, which the app writes as `ticker` for AMFI revaluation.
+casparser>=0.7.0,<1.0
