@@ -162,3 +162,26 @@ files.
 (3) **stale = derived/persistent, "couldn't update" = transient summary (no schema column)** — vs.
 adding a persistent `priceStatus` field; (4) **N = 3 business days** for stale; (5) removing the "Live"
 label in favor of "NAV as of <date> · end of day". On approval I implement + report.
+
+---
+
+## Fast-follow backlog (deferred from the deep review, 2026-06-09)
+
+Implemented + reviewed; these two parser-hardening items were consciously deferred (low risk, and
+the truncated-feed floor conflicts with the small unit-test fixtures). **Fold into the next branch
+that touches `lib/market/amfi.ts`.**
+
+1. **Truncated-but-nonempty feed → mass false NOT_FOUND.** `loadNavMap` throws only on `map.size === 0`.
+   AMFI publishes truncated dumps during its daily rebuild; a partial feed would flag every absent
+   scheme NOT_FOUND ("scheme code didn't resolve"), telling users to fix correct data. Add a
+   plausibility floor in `loadNavMap` (the real feed has ~10k+ schemes, e.g. `if (map.size < 1000)
+   throw`). NOTE: this breaks the current tests that stub a 3-scheme `SAMPLE` via `getQuotes` — make
+   the floor injectable or have those tests synthesize a large feed.
+2. **Explicit future-date guard.** The impossible-date round-trip already prevents `31-Feb`-style
+   rollovers into the future. A genuinely future-dated feed row (clock skew / corruption) still reads
+   "fresh" forever via `isStale` (`businessDaysBetween(future, now) === 0`). Add a sanity bound in
+   `parseAmfiDate` (reject `year > nowYear+1`) or treat `asOf > now` as suspicious in `isStale` —
+   kept out of `parseAmfiDate` so far to keep it time-independent / deterministically testable.
+
+(Full review report at the time of merge: `REVIEW.md` — note it is overwritten by each `/review` run,
+which is why this backlog lives here in the spec rather than there.)
