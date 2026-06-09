@@ -1,7 +1,7 @@
 # AMFI Mutual-Fund Price Provider — Design Spec
 
-**Date:** 2026-06-08
-**Status:** AWAITING APPROVAL — do not implement until approved.
+**Date:** 2026-06-08 (refinements approved 2026-06-09)
+**Status:** APPROVED — implementing. Points 1, 2, 4, 5 as specced; refinements (a)(b) and point-3 change folded in below.
 **Goal:** A real `PriceProvider` for **mutual funds** backed by AMFI's published end-of-day NAV feed,
 dropped in behind the existing interface, **env-gated** (`MARKET_DATA_PROVIDER=amfi`); `manualProvider`
 stays the default. Stocks/"other" remain manual.
@@ -31,8 +31,14 @@ the route + the wealth page/UI — never by `lib/finance.ts` or `lib/wealth.ts`.
 - **Parse** (`parseNavAll(text)`, pure, exported for tests): split lines; a scheme line is
   `Scheme Code;ISIN1;ISIN2;Scheme Name;NAV;Date`. Keep lines where field[0] is a numeric scheme code
   and field[4] parses to a finite number; map → `{ price: Number(field[4]), asOf: parseAmfiDate(field[5]) }`.
-  AMFI date `DD-MMM-YYYY` (e.g. `08-Jun-2026`) → ISO. Skip headers / fund-house section lines / blanks /
-  rows with non-numeric NAV (e.g. "N.A.").
+  Skip headers / fund-house section lines / blanks / rows with non-numeric NAV (e.g. "N.A.").
+- **Date — `DD-Mon-YYYY` (e.g. `14-May-2025`), parsed EXPLICITLY (refinement a).** `parseAmfiDate`
+  regex-matches `DD-Mon-YYYY`, maps the 3-letter month name → index, builds `Date.UTC(y, m, d)` → ISO.
+  **Never `new Date("14-May-2025")`** — that format's parsing is engine-dependent and would silently
+  corrupt the stale check, which is the one signal protecting us from showing an old NAV as current.
+  A row whose date doesn't match the pattern is skipped (not guessed). Staleness math also works off
+  explicit UTC day components, never locale parsing. Test asserts a real `DD-Mon-YYYY` date classifies
+  fresh/stale correctly end-to-end.
 - **Cache:** module-level in-memory cache of the parsed map with a **30-minute TTL** (NAV changes at
   most once/day, so repeated refreshes within a window reuse the parse; avoids re-downloading several
   MB per click). Cache only **successful** parses; on fetch/parse failure, cache nothing (so the next
@@ -70,7 +76,7 @@ export interface PriceProvider {
 
 | Failure | Behavior |
 |---------|----------|
-| **Feed unreachable / HTTP error / parse failure** | `getQuotes` **throws** in step 2 → `withErrorHandling` → **500**, **zero DB writes** (we threw before the loop). Existing prices + `totalWealth` **unchanged**. |
+| **Feed unreachable / HTTP error / parse failure** | `getQuotes` **throws** in step 2 → `withErrorHandling` → **500**, **zero DB writes** (we threw before the loop). Existing prices + `totalWealth` **unchanged**. **(refinement b)** AMFI has documented intermittent multi-day outages, so this path **will** fire in practice — kept exactly as specced (keep last good price). `NAV0.txt` on the portal subdomain is a known alternate source; **noted, not wired now** (no fallback implemented). |
 | **Scheme code not in feed** | asset **not updated** (old price kept, never zeroed); listed in `notFound[]`; surfaced per-asset (below). |
 | **Stale NAV** (asOf older than **N business days**, default **3**) | price **is** updated to the NAV, but flagged `stale`; UI shows a stale badge — never presents an old NAV as current. |
 | **Any failure** | falls back to the **last good `pricePerUnit`**; **never** zero, **never** breaks `totalWealth`. |
@@ -87,13 +93,15 @@ holidays ignored for MVP — noted) between `asOf` and now; `> n` ⇒ stale. Pur
   isStale(priceUpdatedAt)` per asset and passes a `stale` flag to `WealthAssetRow`. The row shows an
   **amber "stale" pill** next to **"NAV as of <date> · end of day"**. Persistent because it's derived
   from the stored `priceUpdatedAt` — a scheme that stops updating naturally ages into "stale".
-- **Couldn't update (transient, per-asset):** the refresh **response** carries `notFound[]`;
-  `RefreshPricesButton` shows a summary — e.g. *"Updated 2 · 1 stale · 1 couldn't update (scheme not
-  found): Flexi Cap Fund"*. **Decision (please confirm):** I'm **not** adding a schema column for a
-  persistent per-asset "not found" flag — the honest persistent signal is staleness (an un-updatable
-  scheme ages into stale), and the transient summary names exactly which assets failed this refresh.
-  If you'd rather it persist across reloads, I'll add a nullable `priceStatus` field (small
-  schema/db:push) — say so and I'll fold it in.
+- **Couldn't update (persistent — point-3 change, approved):** a new nullable **`priceStatus`** column
+  (`'OK' | 'NOT_FOUND' | null`) on `WealthAsset`. A scheme code that doesn't resolve is a **data-entry
+  error the user must fix** — a transient toast vanishes on reload and the asset then silently never
+  updates. So we persist it: refresh sets `priceStatus = 'NOT_FOUND'` on the asset (price untouched,
+  never zeroed), `'OK'` on a successful price. The **row** shows an amber *"scheme code didn't
+  resolve"* pill next to the ticker until fixed. Cleared to `null` on any manual save (POST/PUT) — the
+  user editing the asset is the fix action. The refresh **response** still carries `notFound[]` so the
+  button can name which assets failed **this** run; the persistent column is the durable signal.
+  → adds a column + `db:push`; `PRICE_STATUSES` const in `lib/types.ts`.
 - **Honesty:** API prices always render **"NAV as of <date> · end of day"** (the "Live" label is
   removed); manual prices render "Manual · <date>" as today.
 
@@ -117,8 +125,11 @@ code (used to fetch daily NAV)."* (Presentation only; one field, all types.)
   `app/wealth/page.tsx` (compute + pass `stale`), `components/wealth/WealthAssetRow.tsx` ("NAV as of …
   · end of day" + stale pill, stop saying "Live"), `components/wealth/RefreshPricesButton.tsx` (summary
   incl. stale/not-found), `components/wealth/WealthAssetForm.tsx` (AMFI scheme-code hint).
-- **Unchanged:** `lib/finance.ts`, `lib/wealth.ts`, `lib/data.ts`, `lib/types.ts`, `lib/dashboard.ts`,
-  Prisma schema (no new columns — pending the §"couldn't update" decision), all other routes.
+- **Modify (point-3 change):** `prisma/schema.prisma` (+`priceStatus String?`), `lib/types.ts`
+  (`PRICE_STATUSES`, `priceStatus` on `WealthAsset`), `lib/data.ts` (map `priceStatus`),
+  `app/api/wealth/route.ts` + `app/api/wealth/[id]/route.ts` (clear `priceStatus` on manual save),
+  `lib/format.ts` (`formatDay` for honest NAV date).
+- **Unchanged:** `lib/finance.ts`, `lib/wealth.ts`, `lib/dashboard.ts`, all Planning routes.
 
 ## Test matrix (mock the feed; NO live network)
 

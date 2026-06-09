@@ -28,6 +28,8 @@ model WealthAsset {
   lastPrice      Float? // last fetched/entered unit price (market-data headroom)
   priceUpdatedAt DateTime? // when pricePerUnit was last set
   priceSource    String? // MANUAL | API
+  priceStatus    String? // OK | NOT_FOUND (scheme code didn't resolve on last refresh); null = n/a
+  tickerName     String? // provider-resolved name for `ticker` (echoed back so a wrong code shows); null = n/a
   costBasis      Float? // total amount invested (₹); null = unknown
   purchaseDate   DateTime? // optional; display + future XIRR headroom
   createdAt      DateTime  @default(now())

@@ -24,6 +24,8 @@ function asset(p: Partial<WealthAsset>): WealthAsset {
     lastPrice: null,
     priceUpdatedAt: null,
     priceSource: null,
+    priceStatus: null,
+    tickerName: null,
     costBasis: null,
     purchaseDate: null,
     ...p,

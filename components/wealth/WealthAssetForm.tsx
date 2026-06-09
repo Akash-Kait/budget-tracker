@@ -88,6 +88,9 @@ export function WealthAssetForm({ initial, onDone }: Props) {
       <label className="flex flex-col gap-1">
         <span className="text-[11px] uppercase tracking-wide text-faint">Ticker</span>
         <input className={field} placeholder="optional" value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
+        <span className="text-[10px] leading-tight text-faint">
+          For mutual funds, enter the AMFI scheme code to fetch daily NAV.
+        </span>
       </label>
       <label className="flex flex-col gap-1">
         <span className="text-[11px] uppercase tracking-wide text-faint">Quantity</span>

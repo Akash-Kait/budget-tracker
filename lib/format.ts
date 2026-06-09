@@ -11,6 +11,16 @@ export function formatMonth(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
+export function formatDay(iso: string): string {
+  // Day-level date (e.g. "14 May 2025") — used for honest end-of-day NAV dating.
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export function daysUntil(targetIso: string, fromIso: string): number {
   const ms = new Date(targetIso).getTime() - new Date(fromIso).getTime();
   const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
