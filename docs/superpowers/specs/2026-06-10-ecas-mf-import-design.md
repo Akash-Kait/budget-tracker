@@ -1,7 +1,7 @@
 # MF via the eCAS folio section — replace CAMS/KFintech as the MF source — Design Spec
 
-**Date:** 2026-06-10
-**Status:** AWAITING APPROVAL — spec only, no code until approved.
+**Date:** 2026-06-10 (Q1–Q6 settled 2026-06-10)
+**Status:** APPROVED IN SHAPE — decisions folded in; **awaiting go-ahead to implement**. Spec only.
 **Branch:** `feat/ecas-mf-import` (off `main`, which has the merged eCAS stock feature it reuses).
 **Stakes:** MF ≈ **91% of portfolio value** (₹10.26L of ₹14.4L). Deep-review rigor proportional —
 the **CAMS/KFintech → eCAS migration preserving user-adjusted cost basis** is the named must-break.
@@ -52,27 +52,36 @@ not FIFO lots); `assetGainLoss = round2(assetValue(a) − costBasis)`, `pct = ab
   +₹51,826.59 = **23.56%**, matching the eCAS. → regression test (e).
 - **Flag (not silent):** "Cumulative Amount Invested" is **net of withdrawals** — after partial
   redemptions it's the net figure, so the recomputed P/L is "unrealised P/L vs net invested" (which is
-  exactly what the eCAS shows). Documented, not hidden. Also verify `units×NAV ≈ eCAS Valuation` on the
-  sample (rounding); if they diverge materially, store the eCAS `value` instead — Open Q5.
+  exactly what the eCAS shows). Documented, not hidden.
+- **Value storage — DECIDED (Q5):** store the eCAS **Valuation column as the statement-date `value`**
+  (the document's asserted figure, which ties to the Grand Total ₹10,26,056.02) — do **not** treat a
+  `units×NAV` recompute as the authoritative stored figure. Store `quantity = units` + `pricePerUnit =
+  NAV` too (for display + the AMFI refresh). **Verify `units×NAV` reconciles with the eCAS Valuation to
+  ≤ ₹1 at import; if it diverges by more than a rounding rupee, that's a PARSE-ERROR signal — surface
+  it, don't absorb it.** The coverage check (below) sums the eCAS Valuations against the Grand Total.
+  (Note: `assetValue` prefers `qty×price`, so the *live* displayed value tracks the refreshed NAV; the
+  stored `value` is the verified statement snapshot + the Grand-Total reconciliation anchor.)
 
-## ⚠️ Open question that reshapes the feature: AMFI NAV refresh for eCAS-MF rows (Q1)
+## AMFI NAV refresh for eCAS-MF rows — DECIDED (Q1): keep refresh, resolve ISIN→AMFI from the feed
 
-The folio section gives **ISIN + folio but NO AMFI scheme code**. Existing CAS MF rows store
-`ticker = <AMFI code>`, and `POST /api/wealth/refresh-prices` (the AMFI provider) revalues MFs by
-**AMFI code = ticker**. If eCAS-MF rows store `ticker = ISIN` (no AMFI code), **the AMFI daily-NAV
-refresh can no longer revalue them** — MF prices would come only from the (monthly) eCAS statement.
+The folio section gives **ISIN + folio, no AMFI code** (Q6 confirmed; the "RTA scheme code" like
+`ETDG/8019` is the AMC/RTA code, **not** the AMFI code — never conflate). We **keep daily NAV refresh**
+(losing it on 91% of the portfolio is a real regression), resolving **ISIN → AMFI code from the AMFI
+`NAVAll` feed itself** — not a static hand-maintained map:
 
-This is a first-order trade-off, not a detail:
-- **(a) Keep AMFI refresh:** add an **ISIN → AMFI-code mapping** (AMFI's published master has both) so
-  eCAS-MF rows still get `ticker = AMFI code` and refresh daily. More machinery; needs the mapping
-  source.
-- **(b) Statement-date MF pricing:** eCAS NAV is the price (refreshed each eCAS import), labeled "as of
-  <statement date> · end of day", AMFI MF-refresh effectively retired. Simpler; loses daily NAVs on 91%
-  of the portfolio.
+- The AMFI feed line is `Scheme Code;ISIN-Growth;ISIN-Reinvest;Scheme Name;NAV;Date` — it already
+  carries the **ISIN columns alongside the scheme code**, and the existing provider already downloads
+  it. **Extend `lib/market/amfi.ts` `parseNavAll` to also index `ISIN → scheme code` (both ISIN
+  columns)**, so the map stays current from live data on every refresh.
+- **eCAS-MF rows store `ticker = ISIN`** (their stable identifier from the folio section). The AMFI
+  provider/`refresh-prices` resolves a MUTUAL_FUND row's identifier by **AMFI code OR ISIN** (existing
+  CAS rows keep `ticker = AMFI code`; eCAS rows use ISIN — both resolve via the same feed). So
+  `amfiProvider.getQuotes` accepts either and looks up `code→quote` directly or `ISIN→code→quote`.
+- **ISIN not found in the feed → a visible `priceStatus = NOT_FOUND` "NAV refresh unavailable for this
+  fund" state**, never silent staleness (reuses the existing NOT_FOUND surfacing).
 
-**Recommendation: (a)** — losing daily NAVs on 91% of value is a real regression; the AMFI work exists
-precisely for that. But it's your call. **This decision gates the data model and the parser's ticker
-mapping — please answer before implementation.**
+(Wealth→market is allowed by the firewall — the refresh route already calls the provider. The eCAS-MF
+import also consults this feed-derived ISIN→code map for migration matching — see below.)
 
 ## Reconcile (reuse the established discipline; pure `lib/ecas/mf-reconcile.ts`)
 
@@ -92,38 +101,40 @@ hand-entered). eCAS-MF rows key on `folio|ISIN`. **The keys don't bridge** (`amf
 import would **create new MF rows beside the CAS rows → double-count 91% of the portfolio.** This is the
 must-break.
 
-**The bridge (Open Q2 — needs your decision):** the only fields common to both a CAS row and an eCAS
-folio row are **folio + scheme name** (CAS has no stored ISIN; eCAS folio has no AMFI code). Options:
-- **(b1) folio + normalized scheme name** — exact folio + fuzzy-normalized name. Works on the sample but
-  name rendering can differ between CAMS-CAS and eCAS-folio. Fragile on 91% of value.
-- **(b2) ISIN ↔ AMFI master map** (the same map Q1-a needs) — bridge CAS `ticker=amfi` ↔ eCAS `ISIN`
-  via AMFI's master. The robust key bridge; needs the mapping source.
-- **(b3) one-time preview/confirm** — present the proposed CAS→eCAS matches (old basis vs eCAS invested,
-  old units vs eCAS units) and require explicit user confirmation before converting. Safest for a 91%
-  migration; most work.
+**The bridge — DECIDED (Q2): feed-derived ISIN→AMFI + a MANDATORY, BLOCKING preview/confirm.**
+- Resolve each eCAS folio row's **ISIN → AMFI code via the Q1 feed-derived map**, then **match to
+  existing CAS rows by `folio + AMFI code`** (CAS rows are `importKey = folio|amfi`, `ticker = amfi`).
+  This is the exact equivalence — not fuzzy name matching.
+- The import is **two-phase**: phase 1 parses + resolves + matches and returns a **PREVIEW** (no
+  writes): e.g. *"5 existing → 5 matched · 0 new · 0 unmatched."* Phase 2 applies **only on explicit
+  user confirmation**. Any row **unmatched on either side** (an eCAS fund with no CAS row, or a CAS row
+  with no eCAS match — including an ISIN the feed can't resolve) is **surfaced in the preview, never
+  auto-created or auto-deleted**. The one-time friction is justified by it being 91% of the portfolio.
 
-**Recommendation: (b2) for the match + (b3)'s preview as a safety net** — but flag for approval.
+**Cost-basis on migration — DECIDED (Q3): preserve, surface, never auto-prefer eCAS.**
+- existing `costBasis == null` → take the eCAS `amount_invested` (finally a real basis).
+- existing `costBasis != null` → **preserve it (merge)** and **surface the discrepancy** in the preview
+  ("eCAS reports ₹X invested; stored basis ₹Y") for the user to choose **per fund** — never silently
+  overwrite, never silently keep.
+- **Schema note (stated, per your ask):** the schema does **NOT** track whether `costBasis` was
+  user-adjusted vs import-set (it's a plain `Float?`). So we take the **safe side**: a non-null basis is
+  always treated as possibly-user-adjusted → preserve + surface, never auto-adopt. (A future
+  `costBasisSource`/`costBasisManual` flag could enable auto-adopt for never-touched rows; out of scope.)
 
-**Cost-basis on migration (Open Q3):** per the constraint "never clobber a user-adjusted MF cost basis":
-- existing `costBasis == null` → take the eCAS `amount_invested` (a strict gain — finally a real basis).
-- existing `costBasis != null` → **preserve it** (merge), and **surface a discrepancy** when it differs
-  materially from the eCAS `amount_invested` ("your basis ₹Y vs statement ₹X") rather than silently
-  clobber OR silently keep a possibly-stale number. Decision: preserve + surface (honest), vs prefer
-  eCAS (accurate but clobbers). Recommend preserve + surface.
-
-**Non-destructive & reversible:** migration is an in-place **update** (CAS row → `source` flips,
-`importKey`→`folio|ISIN`, units/NAV/invested refreshed, costBasis per Q3) — **no deletes**. The old
-`source='CAS'` + `importKey=folio|amfi` are recorded in the commit/migration notes so it's reversible.
-Applied in one `prisma.$transaction`. The CAS rows are converted, not duplicated.
+**Non-destructive & reversible:** on confirmation, migration is an in-place **update** (CAS row →
+`source` flips to `ECAS`, `importKey`→`folio|ISIN`, `ticker`→ISIN, units/NAV/value refreshed, costBasis
+per Q3) — **no deletes**. The prior `source='CAS'`/`importKey=folio|amfi`/`ticker=amfi` are recorded so
+it's reversible. Applied in one `prisma.$transaction`. CAS rows are **converted, not duplicated** —
+test (c) asserts no duplicate appears for any of the 5 funds.
 
 ## Data model
 
-Likely **no new columns** — reuse `source`, `importKey`, `casStatus`, `costBasis`, `tickerName`,
-`priceSource`. **Open Q4:** the `source` value for eCAS-MF — reuse `'ECAS'` (scoped by `type` in each
-reconcile: stock reconcile filters `STOCK`, MF reconcile filters `MUTUAL_FUND`) vs a distinct
-`'ECAS_MF'`. Reuse + type-scoping is simplest and the `@@unique([source, importKey])` still holds if
-`folio|ISIN` (MF) never equals `boId|isin` (stock) — they won't (different ID formats). Recommend reuse
-+ type scoping; confirm. `priceSource = 'ECAS'` (statement NAV) until an AMFI refresh (Q1-a) flips it.
+**No new columns** — reuse `source`, `importKey`, `casStatus`, `costBasis`, `tickerName`, `priceSource`,
+`value`. **DECIDED (Q4): `source = 'ECAS'`, type-scoped** (no `'ECAS_MF'`) — the `type` field already
+distinguishes MF from STOCK, so each reconcile filters by type (stock → `STOCK`, MF → `MUTUAL_FUND`),
+consistent with the stock importer. `@@unique([source, importKey])` still holds — `folio|ISIN` (MF) and
+`boId|isin` (stock) never collide (different ID formats). `ticker = ISIN`; `priceSource = 'ECAS'` (the
+statement NAV) until an AMFI refresh resolves ISIN→code and flips it to `API`.
 
 ## Firewall / honesty (unchanged)
 
@@ -151,33 +162,48 @@ parser.
 - **(a) double-count:** a fund in both folio + demat-`INF` sections → imported once (folio); the
   demat-`INF` row is not imported as MF.
 - **(b) folio MF row parses** with amount-invested + valuation intact (the 5 sample schemes).
-- **(c) migration preserves user-adjusted cost basis:** an existing CAS MF row with a user-set
-  `costBasis` migrates to eCAS-sourced **without** the basis being overwritten (merge); a null-basis CAS
-  row gains the eCAS `amount_invested`. No duplicate row created (bridge matched).
+- **(c) migration — must-break: no duplicates + preserve user basis.** Existing CAS rows
+  (`folio|amfi`) bridged to eCAS (`folio|ISIN`) via feed-resolved ISIN→AMFI must **convert in place,
+  not duplicate** any of the 5 funds. A user-set `costBasis` is preserved (merge) + the discrepancy
+  surfaced; a null-basis row gains the eCAS `amount_invested`.
+- **(c2) bridge no-duplicate (named must-break):** feed `ISIN→amfi` resolution + `folio+amfi` match —
+  assert each of the 5 funds matches its CAS row (0 new, 0 unmatched) and produces exactly one row.
+  And: an ISIN the feed can't resolve → surfaced unmatched in the preview, **not** auto-created.
+- **(c3) preview is blocking:** phase-1 returns the preview with **zero DB writes**; nothing is written
+  without explicit confirmation (assert no `create`/`update` before confirm).
 - **(d) reconcile discipline:** absent fund flagged not deleted; idempotent re-import (no dupes);
   older-statement guard (409) / undateable (422).
-- **(e) semantic reconciliation:** stored `costBasis = amount_invested` → `lib/wealth` P/L equals the
-  eCAS Unrealised P/L on the sample (Canara Robeco 23.56%, etc.).
+- **(e) semantic reconciliation:** `costBasis = amount_invested` → `lib/wealth` P/L equals the eCAS
+  Unrealised P/L on the sample (Canara Robeco 23.56%, etc.). And **value = eCAS Valuation**, with
+  `units×NAV` reconciling to ≤ ₹1 (a larger gap → parse error, asserted).
 - **(f) MF gain/loss still renders** (coloured bars, real P/L) — the regression the chart drove this
   revisit for; `gainLossStatus` returns gain/loss (not striped) for an eCAS-MF row with a basis.
-- **(g) firewall:** `lib/finance.ts` imports nothing here; `lib/ecas` imports no finance.
+- **(g) ISIN→AMFI from the feed:** `parseNavAll` indexes both ISIN columns → `getQuotes` resolves a MF
+  row by ISIN; an ISIN absent from the feed → `priceStatus = NOT_FOUND` ("NAV refresh unavailable"),
+  not silent staleness.
+- **(h) firewall:** `lib/finance.ts` imports nothing here; `lib/ecas` imports no finance.
 
-## Open questions (please answer before implementation)
+## Resolved decisions (Q1–Q6, settled 2026-06-10)
 
-- **Q1 — AMFI refresh:** keep daily NAV refresh via an ISIN→AMFI-code map (ticker=AMFI), or accept
-  statement-date MF pricing (ticker=ISIN, AMFI MF-refresh retired)? **Reshapes the feature.** (Rec: keep.)
-- **Q2 — migration bridge** CAS(`folio|amfi`) ↔ eCAS(`folio|ISIN`): folio+name, ISIN↔AMFI master map,
-  and/or a preview/confirm step? (Rec: ISIN↔AMFI map + preview.)
-- **Q3 — cost basis on migration** when the CAS row already has one: preserve+surface-discrepancy
-  (rec), or prefer the eCAS figure?
-- **Q4 — source value:** reuse `'ECAS'` (type-scoped) vs `'ECAS_MF'`. (Rec: reuse + type scope.)
-- **Q5 — value source:** `units×NAV` (recompute) vs the eCAS `Valuation` column if rounding diverges.
-- **Q6 — does the folio section actually omit the AMFI code?** (Confirm from the real page 9; if it's
-  present, Q1/Q2 simplify enormously — ticker=AMFI directly, key bridge trivial.)
+- **Q1 — keep AMFI refresh**, resolving **ISIN→AMFI code from the `NAVAll` feed** (extend `parseNavAll`
+  to index both ISIN columns); `ticker = ISIN`; ISIN-not-in-feed → visible NOT_FOUND.
+- **Q2 — feed-resolved ISIN→AMFI + `folio+amfi` match, behind a MANDATORY, BLOCKING preview/confirm;**
+  unmatched (either side) surfaced, never auto-created/deleted.
+- **Q3 — preserve a stored `costBasis` + surface the discrepancy** (never auto-prefer eCAS); null →
+  adopt eCAS. Schema does **not** flag user-adjusted, so non-null is always treated as user-owned.
+- **Q4 — `source = 'ECAS'`, type-scoped** (no `'ECAS_MF'`).
+- **Q5 — store the eCAS Valuation as `value`** (ties to the Grand Total); units+NAV for display/refresh;
+  `units×NAV` vs Valuation > ₹1 ⇒ parse error.
+- **Q6 — confirmed: folio section has NO AMFI code** (RTA scheme/AMC code present, not AMFI). Residual:
+  confirm against full page 9 in case a column was off-screen.
 
 ---
 
-**On approval:** implement on `feat/ecas-mf-import` (parser + pure MF reconcile + migration + route + UI
-+ tests), then a **DEEP review before commit** with the **CAMS/KFintech→eCAS migration preserving
-user-adjusted cost basis on 91% of the portfolio** as the named must-break target. Each fix lands with
-its regression test. Verify live on the real eCAS (the 5 schemes + the Grand Total reconcile).
+**On your go-ahead:** implement on `feat/ecas-mf-import` (folio-MF parser + feed-derived ISIN→AMFI index
+in the AMFI provider + pure MF reconcile + two-phase preview/apply route + migration + UI + tests), then
+a **DEEP review before commit** with TWO named must-break targets:
+1. the **CAMS/KFintech→eCAS migration preserving user-adjusted cost basis on 91% of the portfolio**, and
+2. the **`folio|amfi` (CAS) vs `folio|ISIN` (eCAS) bridge must not duplicate any of the 5 funds** —
+   re-attacked via the feed-resolved ISIN→AMFI match + the blocking preview.
+Each fix lands with its regression test. Verify live on the real eCAS (the 5 schemes + the Grand Total
+₹10,26,056.02 reconcile, and the preview showing 5 matched / 0 new / 0 unmatched).
