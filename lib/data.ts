@@ -28,6 +28,9 @@ export async function getWealthAssets(): Promise<WealthAsset[]> {
     priceSource: r.priceSource as WealthAsset['priceSource'],
     priceStatus: r.priceStatus as WealthAsset['priceStatus'],
     tickerName: r.tickerName,
+    source: r.source as WealthAsset['source'],
+    importKey: r.importKey,
+    casStatus: r.casStatus as WealthAsset['casStatus'],
     costBasis: r.costBasis,
     purchaseDate: r.purchaseDate ? r.purchaseDate.toISOString() : null,
   }));

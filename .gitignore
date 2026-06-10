@@ -45,3 +45,9 @@ next-env.d.ts
 *.db-journal
 /prisma/*.db
 /prisma/*.db-journal
+
+# python CAS-import sidecar venv + caches (per-OS, like node_modules — never commit)
+.venv/
+scripts/.venv/
+__pycache__/
+*.pyc

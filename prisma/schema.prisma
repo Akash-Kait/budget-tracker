@@ -30,10 +30,15 @@ model WealthAsset {
   priceSource    String? // MANUAL | API
   priceStatus    String? // OK | NOT_FOUND (scheme code didn't resolve on last refresh); null = n/a
   tickerName     String? // provider-resolved name for `ticker` (echoed back so a wrong code shows); null = n/a
+  source         String? // CAS | MANUAL (null = legacy/manual); scopes what CAS reconciliation may touch
+  importKey      String? // stable CAS reconciliation key (AMFI code, else folio|scheme) — idempotency backbone
+  casStatus      String? // CURRENT | ABSENT ("not in latest CAS"); null = not CAS-sourced
   costBasis      Float? // total amount invested (₹); null = unknown
   purchaseDate   DateTime? // optional; display + future XIRR headroom
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([importKey])
 }
 
 model PlanItem {

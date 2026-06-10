@@ -21,13 +21,24 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   OTHER: 'Other',
 };
 
-export const PRICE_SOURCES = ['MANUAL', 'API'] as const;
+// MANUAL = user-entered, API = AMFI live NAV, CAS = seeded from an uploaded statement (until a
+// later AMFI refresh takes over and flips it to API).
+export const PRICE_SOURCES = ['MANUAL', 'API', 'CAS'] as const;
 export type PriceSource = (typeof PRICE_SOURCES)[number];
 
 // Outcome of the last live-price refresh for an asset. NOT_FOUND = the ticker/scheme code didn't
 // resolve in the feed (a data-entry error to fix); persisted so it survives reloads, unlike a toast.
 export const PRICE_STATUSES = ['OK', 'NOT_FOUND'] as const;
 export type PriceStatus = (typeof PRICE_STATUSES)[number];
+
+// How a holding entered the app. CAS-sourced rows are the only ones a CAS re-upload may update/flag.
+export const SOURCES = ['MANUAL', 'CAS'] as const;
+export type Source = (typeof SOURCES)[number];
+
+// Whether a CAS-sourced holding appeared in the most recent uploaded statement. ABSENT = flagged
+// "not in latest CAS" (never auto-deleted); null = not CAS-sourced.
+export const CAS_STATUSES = ['CURRENT', 'ABSENT'] as const;
+export type CasStatus = (typeof CAS_STATUSES)[number];
 
 export interface WealthAsset {
   id: string;
@@ -42,6 +53,9 @@ export interface WealthAsset {
   priceSource: PriceSource | null;
   priceStatus: PriceStatus | null; // result of last refresh; NOT_FOUND surfaces a fix-me badge
   tickerName: string | null; // provider-resolved name for `ticker`, shown so a wrong code is visible
+  source: Source | null; // MANUAL | CAS (null = legacy/manual)
+  importKey: string | null; // stable CAS reconciliation key
+  casStatus: CasStatus | null; // CURRENT | ABSENT (CAS-sourced only)
   costBasis: number | null; // total amount invested; null = unknown
   purchaseDate: string | null; // ISO
 }

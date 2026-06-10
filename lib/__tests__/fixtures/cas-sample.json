@@ -1,0 +1,41 @@
+{
+  "statementDate": "2025-05-31",
+  "schemes": [
+    {
+      "amfi": "120503",
+      "isin": "INF000XX0001",
+      "rta": "CAMS",
+      "folio": "REDACTED-1",
+      "name": "Synthetic Flexi Cap Fund - Direct Plan - Growth",
+      "units": 1234.567,
+      "nav": 89.1234,
+      "navDate": "2025-05-30",
+      "value": 110021.5,
+      "cost": 90000
+    },
+    {
+      "amfi": "118989",
+      "isin": "INF000XX0002",
+      "rta": "KFINTECH",
+      "folio": "REDACTED-2",
+      "name": "Synthetic Liquid Fund - Direct Plan - Growth",
+      "units": 500.0,
+      "nav": 200.5,
+      "navDate": "2025-05-30",
+      "value": 100250.0,
+      "cost": null
+    },
+    {
+      "amfi": null,
+      "isin": "INF000XX0003",
+      "rta": "CAMS",
+      "folio": "REDACTED-3",
+      "name": "Synthetic Old Scheme Without AMFI Code",
+      "units": 10.0,
+      "nav": 50.0,
+      "navDate": "2025-05-30",
+      "value": 500.0,
+      "cost": 400
+    }
+  ]
+}
