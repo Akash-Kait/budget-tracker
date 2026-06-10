@@ -226,3 +226,130 @@ a **DEEP review before commit** with TWO named must-break targets:
    re-attacked via the feed-resolved ISIN→AMFI match + the blocking preview.
 Each fix lands with its regression test. Verify live on the real eCAS (the 5 schemes + the Grand Total
 ₹10,26,056.02 reconcile, and the preview showing 5 matched / 0 new / 0 unmatched).
+
+---
+
+## Implementation outcome (shipped on `feat/ecas-mf-import`, deep-reviewed + live-verified 2026-06-10)
+
+**Parser source — FOLIO TABLE ONLY (key correction found in live-verify).** The same MF ISINs appear in
+three tables: the page-9 **folio** section (cost-basis source), the demat **equity** holding statement
+(MF units held in demat, no basis), and a **transaction** statement (Op.Bal/Cr/Debit). The first cut
+scanned every table and double-counted (transaction rows' Op.Bal/Cr were misread as invested/valuation,
++₹5,650/+₹861 over the Grand Total). Fix: `is_folio_table` gates on the folio header (`Folio` +
+`Cumulative Invested` columns); `collect_mf_rows` parses only that table. The demat MF funds
+(INVESCO/MOTILAL/SBI Gold/UTI, ~₹1.8L, no basis) are intentionally **not** imported — folio-only scope.
+
+**Deep-review hardening (all with regression tests):**
+- **Coverage is BLOCKING:** sum of parsed valuations/invested must tie to the Grand Total (±₹1); a
+  shortfall means a folio row silently didn't parse → block (don't under-report 91% / mis-flag absent).
+- **Half-migrated conflict blocks:** if a fund has BOTH a CAS (`folio|amfi`) and an eCAS (`folio|ISIN`)
+  row, converting one would orphan the other → block, don't silently double-count.
+- **`migrationContext` = any non-ECAS MF row** (CAS *or* manual) — a manual MF overlap can't be
+  auto-created either.
+- **Older-statement guard includes CAS dates** so the first migration is protected.
+- **Soft-hyphen/zero-width ISIN repair** in the parser AND re-cleaned in the reconcile + route (the
+  route keys the AMFI bridge map on the same normalization) — verified on Mirae `INF769K01DM9`.
+- **Grand-Total valuation = col 6 (`nums[1]`)**, P/L-bleed-proof.
+- Security review clean: PDF/password server-side, in-memory, stdin-only, never logged; finance firewall intact.
+
+**Two-phase route** `POST /api/wealth/import-ecas-mf` (`confirm` flag): stateless preview→apply, the
+server re-parses and re-checks `blocked` on apply (client never trusted). CAS import **code retained**;
+CAS panel **unmounted** as the MF source.
+
+**Live-verify (real eCAS, 30-04-2026):** 5 folio funds imported, ₹8,50,000 basis preserved, parsed
+valuation tied exactly to ₹10,26,056.02; AMFI then refreshed every fund to live NAV by ISIN (Mirae's
+wrapped ISIN resolved). Verification: Python 25, vitest 218, tsc clean, `next build` exit 0.
+
+> **⚠ ROUND 1 WAS INCOMPLETE — NOT SHIPPED.** Live-verify surfaced a silent under-report: the eCAS
+> holds **9** mutual funds, not 5. Four are **demat-held MFs** (INVESCO `INF205KA1213`, Motilal
+> `INF247L01AE7`, SBI Gold `INF200K01RP8`, UTI `INF789FC12T1` = **₹1,80,540.01**, the "Mutual Funds
+> Held in Demat Form" bucket) — INF rows in the equity-style holding statement (pages 6-7). They fell
+> into a scope gap: the stock importer skips INF (correct) and the folio MF importer was page-9-only,
+> so **no importer owned them**. Worse, the coverage check tied to the **folio Grand Total** — its own
+> section's total — so it structurally could not see a whole MF sub-class vanish: green **and** wrong.
+> DB trace confirmed 0 prior MF rows (so nothing was orphaned by unmounting the CAS panel; the demat
+> MFs were simply never imported). Round 2 (below) fixes the scope gap **and** the coverage blind spot.
+
+---
+
+## Round 2 — own ALL mutual funds (folio + demat-held); fix the coverage blind spot (awaiting approval)
+
+**Decision (approved 2026-06-10):** Option 1 — the single MF importer ingests BOTH MF sections of the
+eCAS, so one importer owns all 9 funds. Demat-held MFs are tracked **value-only** (quantity + statement
+value, **no cost basis**, **no gain/loss** — the same honest treatment as eCAS stocks). They are mutual
+funds, so `type = MUTUAL_FUND` (not STOCK). Stays on `feat/ecas-mf-import` (Round 1 is uncommitted;
+shipping the folio-only version would ship the under-report).
+
+### What the importer reads now — TWO sections of the eCAS
+| Section | Where | Has cost basis? | Key | gain/loss |
+|---|---|---|---|---|
+| **Folio MF** (Round 1) | page 9 "MUTUAL FUND UNITS HELD AS ON" | yes (Cumulative Invested) | `folio\|ISIN` | yes |
+| **Demat-held MF** (new) | holding statement, pages 6-7 (INF rows) | **no** | `boId\|ISIN` | no — "— not set" |
+
+The transaction statement (page 6 table 1: Op.Bal/Cr/Debit/Stamp) is NEITHER — it must stay excluded
+(its INF rows already double-counted once; never read it as a holding).
+
+### Design delta
+
+1. **Parser (`scripts/ecas_parse.py`, `mf` mode).** In addition to `is_folio_table` (Round 1), add
+   `is_demat_holding_table` (header has *Current/Free Bal* + *Market Price/Value*, and lacks *Folio*,
+   *Cumulative*, and the transaction-table markers *Op. Bal/Stamp*). From those tables, parse the INF
+   rows (reuse `parse_holding_row`; keep `classify_isin == 'mf'` instead of skipping), tagged with the
+   page's BO ID. Emit a unified `holdings[]` where each holding carries `section` (`'folio'|'demat'`),
+   its key inputs (`folio` or `boId`), `amountInvested` (null for demat), and `valuation` (= statement
+   value for demat). Also parse the **demat-MF stated total** for coverage (see #3).
+   - **Demat-MF anchor = the DISCRETE stated line.** Parse the page-5 summary line "Mutual Funds Held
+     in Demat Form ₹1,80,540.01" directly. Do **NOT** derive it as `demat Portfolio Value − Equity
+     total` — that subtraction assumes the demat account holds *only* equity + MF and silently
+     misattributes any other class (bonds/ETFs/REITs) into the MF bucket (the same closed-world
+     assumption that caused the original gap). Derivation is a fallback ONLY if the discrete line truly
+     doesn't exist, and then it must `assert demat_total == equity + MF` and **BLOCK/surface** if the
+     arithmetic doesn't close — never absorb the remainder into MF. *Probe at implementation to confirm
+     the discrete line's exact (likely bilingual/garbled) label + location.*
+
+2. **MANDATORY no-overlap guard (where a double-count would hide).** Before storing, assert NO ISIN
+   appears in both sections. Probe data shows the 9 are disjoint (folio: Canara/ICICI Tech/Mirae/quant
+   ELSS/quant Small; demat: INVESCO/Motilal/SBI Gold/UTI) — **verified in code, not eyeballed**. If an
+   ISIN IS in both → same fund held two ways → ingest **once, folio wins** (it carries cost basis), drop
+   the demat copy at the storage step. *Regression: an ISIN in both sections → imported once, from
+   folio, with basis; never twice.*
+
+3. **Coverage fix (the blind spot) — three checks, all must tie (±₹1):**
+   - **folio:** folio-parsed-valuation vs folio Grand Total (₹10,26,056);
+   - **demat:** demat-parsed-valuation vs the **discrete** demat-MF stated line (₹1,80,540);
+   - **stored total (overlap-consistency):** the value actually STORED must equal
+     `folio Grand Total + demat stated − overlap-dropped`. This closes the hole where an ISIN in both
+     sections makes folio coverage tie (counts it) AND demat coverage tie (counts it) while storage
+     dedups to one (folio wins) → two green checks but a stored total low by the overlap. The
+     overlap-dropped amount (the demat copy we discard) is subtracted from the anchor, and the stored
+     total is validated against that adjusted figure — the two per-section checks may not pass while
+     the stored total ≠ what they blessed.
+   `coverageBlocking` if ANY of the three fails → impossible for a sub-class to vanish, or for an
+   overlap to silently shrink the total. Coverage runs at PREVIEW/IMPORT time against **statement
+   valuations only** — never re-run against post-AMFI-refresh values (those move daily → false-positive).
+   *Regressions: drop one demat MF → demat check fails → blocked; drop one folio MF → folio check
+   fails → blocked; an ISIN in BOTH sections → stored once (folio, with basis), surfaced as a notable
+   overlap event, and the stored total ties to folio+demat−overlap (never silently merged).*
+
+4. **Reconcile/storage (`mf-reconcile.ts`).** Demat MF create: `type=MUTUAL_FUND`, `source='ECAS'`,
+   `costBasis=null`, `importKey=boId|ISIN`, `priceUpdatedAt=`statement AS-ON, `priceSource='ECAS'` →
+   AMFI daily refresh by ISIN applies (same as folio). Per-section ownership: `flaggedAbsent` and
+   idempotency must treat `folio|ISIN` and `boId|ISIN` keys correctly so a future re-import is stable.
+   (Current import is a pure create — DB trace shows 0 prior MF rows — but the discipline must hold.)
+
+5. **No UI/firewall change of substance.** Demat MF rows render like no-basis stocks (gain/loss line
+   "— not set"). `lib/finance.ts` still imports nothing here.
+
+### Deep-review named must-breaks (Round 2)
+1. **No-overlap guard** — an ISIN in both sections is stored once (folio), never double-counted.
+2. **Total-MF coverage** — neither the folio NOR the demat sub-class can vanish without the coverage
+   check firing; coverage uses statement valuations, never post-refresh values.
+3. **Overlap-coverage-consistency** — when an overlap is deduped, the stored total ties to
+   `folio+demat−overlap`; the two per-section checks cannot both pass while the stored total is wrong;
+   the overlap is surfaced, never silently merged.
+
+### Live-verify acceptance (Round 2)
+All 9 MFs present; MF total reconciles to folio + demat buckets at statement date
+(≈ ₹10,26,056 + ₹1,80,540 = ₹12,06,596); the 5 folio funds show gain/loss, the 4 demat funds show
+"— not set"; AMFI refresh works on all 9. Then housekeeping (`git log --all -- app-full.zip
+.claude/settings.json` → gitignore → exclude) and commit.

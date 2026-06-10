@@ -13,7 +13,9 @@ export function RefreshPricesButton() {
     const res = await fetch('/api/wealth/refresh-prices', { method: 'POST' });
     setBusy(false);
     if (!res.ok) {
-      setMsg('Refresh failed.');
+      // Loud, not silent: a feed failure changed nothing server-side (prices kept at their last NAV),
+      // so say so explicitly rather than leave the last values looking current.
+      setMsg('NAV refresh failed — prices unchanged, may be stale.');
       return;
     }
     const data = await res.json();

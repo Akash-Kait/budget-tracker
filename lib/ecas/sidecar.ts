@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ecasParsedSchema, type EcasParsed } from './types';
+import { mfParsedSchema, type MfParsed } from './mf-types';
 
 // I/O boundary for the Python eCAS parser (pdfplumber). Separate from lib/cas/sidecar.ts. Sends the
 // PDF over STDIN (password first line — never argv/env), in-memory; never logs the PDF/password/PII.
@@ -46,10 +47,12 @@ function fromExit(code: number | null, out = ''): EcasError {
   }
 }
 
-export function runEcasParser(pdf: Buffer, password: string): Promise<EcasParsed> {
+// Spawn the parser in the given mode, stream the PDF over STDIN, and return the raw STDOUT JSON.
+// `validate` is applied by the caller. The PDF/password/PII are never logged.
+function spawnParser(args: string[], pdf: Buffer, password: string): Promise<unknown> {
   const py = existsSync(VENV_PY) ? VENV_PY : 'python3';
-  return new Promise<EcasParsed>((resolve, reject) => {
-    const child = spawn(py, [SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
+  return new Promise<unknown>((resolve, reject) => {
+    const child = spawn(py, [SCRIPT, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let settled = false;
     const done = (fn: () => void) => {
@@ -80,15 +83,11 @@ export function runEcasParser(pdf: Buffer, password: string): Promise<EcasParsed
     child.on('close', (code) => {
       done(() => {
         if (code !== 0) return reject(fromExit(code, out));
-        let json: unknown;
         try {
-          json = JSON.parse(out);
+          resolve(JSON.parse(out));
         } catch {
-          return reject(new EcasError('BAD_OUTPUT', 'eCAS parser returned invalid output'));
+          reject(new EcasError('BAD_OUTPUT', 'eCAS parser returned invalid output'));
         }
-        const parsed = ecasParsedSchema.safeParse(json);
-        if (!parsed.success) return reject(new EcasError('BAD_OUTPUT', 'Unexpected eCAS parser output'));
-        resolve(parsed.data);
       });
     });
 
@@ -98,4 +97,20 @@ export function runEcasParser(pdf: Buffer, password: string): Promise<EcasParsed
     child.stdin.write(pdf);
     child.stdin.end();
   });
+}
+
+// Equity holding statement (mode "stocks").
+export async function runEcasParser(pdf: Buffer, password: string): Promise<EcasParsed> {
+  const json = await spawnParser([], pdf, password);
+  const parsed = ecasParsedSchema.safeParse(json);
+  if (!parsed.success) throw new EcasError('BAD_OUTPUT', 'Unexpected eCAS parser output');
+  return parsed.data;
+}
+
+// Folio MF section (mode "mf") — the MF data source (cost basis + valuation per folio).
+export async function runEcasMfParser(pdf: Buffer, password: string): Promise<MfParsed> {
+  const json = await spawnParser(['mf'], pdf, password);
+  const parsed = mfParsedSchema.safeParse(json);
+  if (!parsed.success) throw new EcasError('BAD_OUTPUT', 'Unexpected eCAS MF parser output');
+  return parsed.data;
 }

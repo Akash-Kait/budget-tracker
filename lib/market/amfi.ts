@@ -4,10 +4,13 @@
 // Selected only when MARKET_DATA_PROVIDER=amfi; otherwise the manual provider stays default.
 import type { PriceProvider, Quote } from './provider';
 
-export const AMFI_NAV_URL = 'https://www.amfiindia.com/spages/NAVAll.txt';
-// NOTE: AMFI has documented intermittent multi-day outages, so the fail-safe (throw → route 500,
-// keep last good price) fires in practice. NAV0.txt on the portal subdomain is a known alternate
-// source — intentionally NOT wired here; downtime is handled by failing safe, not by a fallback.
+// Canonical endpoint. The legacy `www.amfiindia.com/spages/NAVAll.txt` now 302-redirects here; a
+// source that has begun redirecting is migrating, so we point directly at the resolved target rather
+// than rely on the old redirect persisting (it's a retirement candidate). Confirmed final URL.
+export const AMFI_NAV_URL = 'https://portal.amfiindia.com/spages/NAVAll.txt';
+// NOTE: AMFI has documented intermittent multi-day outages, so the fail-safe (throw → route 500, NO
+// write → keep last good price at its honest "as of" date, flagged stale after N business days)
+// fires in practice. Downtime is handled by failing safe + visible staleness, never a silent freeze.
 
 const MONTHS: Record<string, number> = {
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
@@ -65,18 +68,40 @@ export function parseNavAll(text: string): Map<string, Quote> {
   return out;
 }
 
+/**
+ * Index `ISIN → scheme code` from the feed's two ISIN columns (`f[1]`, `f[2]`). Pure, exported for
+ * tests. Lets a holding identified only by ISIN (eCAS folio MF rows) resolve to its AMFI scheme code
+ * — for both NAV refresh and the CAS→eCAS migration bridge — straight from live data, no static map.
+ */
+export function parseNavIsinIndex(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || !line.includes(';')) continue;
+    const f = line.split(';');
+    if (f.length < 6) continue;
+    const code = f[0].trim();
+    if (!/^\d+$/.test(code)) continue;
+    for (const isin of [f[1], f[2]]) {
+      const v = (isin ?? '').trim().toUpperCase();
+      if (/^IN[A-Z0-9]{10}$/.test(v)) out.set(v, code);
+    }
+  }
+  return out;
+}
+
 // One parse per refresh; cache it ~30 min across refreshes (NAV changes at most once/day) to avoid
 // re-downloading several MB on repeated clicks. Single-instance MVP — each process caches its own.
 const TTL_MS = 30 * 60 * 1000;
-let cache: { at: number; map: Map<string, Quote> } | null = null;
+let cache: { at: number; byCode: Map<string, Quote>; isinToCode: Map<string, string> } | null = null;
 
 /** For tests only — drop the cached parse. */
 export function __clearAmfiCache(): void {
   cache = null;
 }
 
-async function loadNavMap(): Promise<Map<string, Quote>> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.map;
+async function loadNav(): Promise<{ byCode: Map<string, Quote>; isinToCode: Map<string, string> }> {
+  if (cache && Date.now() - cache.at < TTL_MS) return cache;
   // Throws on network failure (rejected fetch), timeout, HTTP error, or an empty/garbage parse. The
   // route calls this BEFORE any DB write, so a throw leaves every price + totalWealth untouched.
   // The timeout matters: AMFI's documented outages include STALLED connections (accept, never
@@ -86,19 +111,35 @@ async function loadNavMap(): Promise<Map<string, Quote>> {
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`AMFI feed HTTP ${res.status}`);
-  const map = parseNavAll(await res.text());
-  if (map.size === 0) throw new Error('AMFI feed parsed to zero schemes');
-  cache = { at: Date.now(), map };
-  return map;
+  const text = await res.text();
+  const byCode = parseNavAll(text);
+  if (byCode.size === 0) throw new Error('AMFI feed parsed to zero schemes');
+  cache = { at: Date.now(), byCode, isinToCode: parseNavIsinIndex(text) };
+  return cache;
+}
+
+/**
+ * Resolve ISINs → AMFI scheme codes from the live feed (null when the feed doesn't carry the ISIN —
+ * e.g. a brand-new fund). Used by the eCAS-MF migration bridge; a null is surfaced, never guessed.
+ */
+export async function resolveAmfiCodes(isins: string[]): Promise<Map<string, string | null>> {
+  const { isinToCode } = await loadNav();
+  const out = new Map<string, string | null>();
+  for (const isin of isins) out.set(isin, isinToCode.get(isin.trim().toUpperCase()) ?? null);
+  return out;
 }
 
 export const amfiProvider: PriceProvider = {
   name: 'amfi',
-  // Batch: fetch + parse ONCE, then resolve every requested scheme code.
+  // Batch: fetch + parse ONCE, then resolve each id by scheme code OR ISIN (eCAS MF rows key on ISIN).
   async getQuotes(tickers: string[]): Promise<Map<string, Quote | null>> {
-    const map = await loadNavMap();
+    const { byCode, isinToCode } = await loadNav();
     const out = new Map<string, Quote | null>();
-    for (const t of tickers) out.set(t, map.get(t.trim()) ?? null);
+    for (const t of tickers) {
+      const id = t.trim();
+      const code = byCode.has(id) ? id : isinToCode.get(id.toUpperCase()) ?? '';
+      out.set(t, byCode.get(code) ?? null);
+    }
     return out;
   },
   async getQuote(ticker: string): Promise<Quote | null> {

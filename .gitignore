@@ -51,3 +51,7 @@ next-env.d.ts
 scripts/.venv/
 __pycache__/
 *.pyc
+
+# Local-only artifacts (never tracked)
+app-full.zip
+.claude/settings.json

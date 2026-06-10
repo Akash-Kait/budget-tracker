@@ -35,6 +35,8 @@ model WealthAsset {
   casStatus      String? // CURRENT | ABSENT ("not in latest CAS"); null = not CAS-sourced
   costBasis      Float? // total amount invested (₹); null = unknown
   purchaseDate   DateTime? // optional; display + future XIRR headroom
+  statementDate  DateTime? // eCAS "as of" date of the import that set this row; NOT moved by a NAV
+  // refresh (unlike priceUpdatedAt) → the refresh-safe anchor for the older-statement guard
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   parseAmfiDate,
   parseNavAll,
+  parseNavIsinIndex,
+  resolveAmfiCodes,
   amfiProvider,
   __clearAmfiCache,
   AMFI_NAV_URL,
@@ -146,5 +148,27 @@ describe('stale classification on a real DD-Mon-YYYY NAV (end-to-end)', () => {
     const old = parseNavAll(SAMPLE).get('100001')!.asOf; // 2025-05-14
     expect(isStale(old, '2025-05-26T10:00:00.000Z')).toBe(true); // ~8 business days later
     expect(isStale(old, '2025-05-14T18:00:00.000Z')).toBe(false); // same UTC day
+  });
+});
+
+describe('ISIN→code index (feed-derived; for eCAS-MF refresh + migration bridge)', () => {
+  it('parseNavIsinIndex maps both ISIN columns to the scheme code', () => {
+    const idx = parseNavIsinIndex(SAMPLE);
+    expect(idx.get('INF111A01011')).toBe('100001'); // ISIN-Growth column
+    expect(idx.get('INF111A01029')).toBe('100001'); // ISIN-Reinvest column
+    expect(idx.get('INF222B01029')).toBe('200002');
+  });
+
+  it('getQuotes resolves a holding identified by ISIN (not just by scheme code)', async () => {
+    stubFetch(async () => ({ ok: true, text: async () => SAMPLE }));
+    const quotes = await amfiProvider.getQuotes!(['INF111A01011']);
+    expect(quotes.get('INF111A01011')).toMatchObject({ price: 123.4567 });
+  });
+
+  it('resolveAmfiCodes returns the code for a known ISIN and null for an unknown one', async () => {
+    stubFetch(async () => ({ ok: true, text: async () => SAMPLE }));
+    const m = await resolveAmfiCodes(['INF111A01011', 'INF999Z01099']);
+    expect(m.get('INF111A01011')).toBe('100001');
+    expect(m.get('INF999Z01099')).toBeNull();
   });
 });
