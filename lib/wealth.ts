@@ -80,6 +80,18 @@ export function assetGainLoss(a: WealthAsset): GainLoss | null {
   return { absolute, pct };
 }
 
+/**
+ * The gain/loss display status the chart keys its bar off: 'gain'/'loss' colour, or 'none' →
+ * the striped "no cost basis" hatch. A holding with unknown cost basis (e.g. an eCAS-imported
+ * stock — eCAS has no cost column) is 'none' and shows no P/L; holdings WITH a basis are
+ * unchanged. (Extracted so the striped-vs-coloured decision is unit-testable.)
+ */
+export function gainLossStatus(a: WealthAsset): 'gain' | 'loss' | 'none' {
+  const g = assetGainLoss(a);
+  if (g === null) return 'none';
+  return g.absolute > 0 ? 'gain' : g.absolute < 0 ? 'loss' : 'none';
+}
+
 /** Sum of known cost bases; null when NO asset has a cost basis (fully unknown). */
 export function totalCostBasis(assets: WealthAsset[]): number | null {
   const known = assets.filter((a) => assetCostBasis(a) !== null);

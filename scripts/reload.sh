@@ -44,19 +44,23 @@ if [ "$SEED" -eq 1 ]; then
 fi
 
 if [ "$RUN_CAS" -eq 1 ]; then
-  # Optional CAS-import sidecar: a Python venv with casparser (MIT parser only). Non-fatal — if
-  # python3 is missing or the install fails, CAS import simply returns 501 and the rest works.
-  # The venv lives at scripts/.venv (gitignored; per-OS, never committed). Idempotent.
-  echo "▸ Provisioning CAS-import sidecar (casparser, optional)…"
+  # Optional import sidecars: a Python venv with casparser (MF CAS, MIT) + pdfplumber (stock eCAS,
+  # MIT). Non-fatal — if python3 is missing or an install fails, that importer returns 501 and the
+  # rest works. The venv lives at scripts/.venv (gitignored; per-OS, never committed). Idempotent.
+  echo "▸ Provisioning import sidecars (casparser + pdfplumber, optional)…"
   if command -v python3 >/dev/null 2>&1; then
-    [ -x scripts/.venv/bin/python ] || python3 -m venv scripts/.venv || true
-    if [ -x scripts/.venv/bin/python ] && scripts/.venv/bin/pip install --quiet -r scripts/requirements.txt; then
-      echo "  ✓ casparser ready for CAS PDF import."
+    # --copies (not symlinks): a venv under the project root with a bin/python symlink pointing OUT
+    # of the root breaks `next build` (Turbopack rejects the out-of-root symlink). Copies avoid it.
+    [ -x scripts/.venv/bin/python ] || python3 -m venv --copies scripts/.venv || true
+    if [ -x scripts/.venv/bin/python ] \
+      && scripts/.venv/bin/pip install --quiet -r scripts/requirements.txt \
+      && scripts/.venv/bin/pip install --quiet -r scripts/requirements-ecas.txt; then
+      echo "  ✓ casparser + pdfplumber ready (CAS MF + eCAS stock import)."
     else
-      echo "  ⚠ couldn't install casparser — CAS import will return 501 until set up (see docs/ARCHITECTURE.md)."
+      echo "  ⚠ couldn't install a parser — that importer will return 501 until set up (see docs/ARCHITECTURE.md)."
     fi
   else
-    echo "  ⚠ python3 not found — CAS import disabled until Python 3 + casparser are installed."
+    echo "  ⚠ python3 not found — CAS/eCAS import disabled until Python 3 + the parsers are installed."
   fi
 fi
 

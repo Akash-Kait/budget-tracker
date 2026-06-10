@@ -1,0 +1,20 @@
+{
+  "statementDate": "2026-05-31T00:00:00.000Z",
+  "equityStatedTotal": 88080,
+  "accounts": [
+    {
+      "boId": "BO-A",
+      "holdings": [
+        { "isin": "INE001A01036", "name": "Acme Industries Ltd", "units": 100, "price": 250.5, "value": 25050 },
+        { "isin": "INE002B01018", "name": "Beta Tech Ltd", "units": 40, "price": 1200, "value": 48000 }
+      ]
+    },
+    {
+      "boId": "BO-B",
+      "holdings": [
+        { "isin": "INE001A01036", "name": "Acme Industries Ltd", "units": 60, "price": 250.5, "value": 15030 }
+      ]
+    }
+  ],
+  "unrecognized": [{ "isin": "IN0020230011", "name": "Synthetic Govt Security" }]
+}

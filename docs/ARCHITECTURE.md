@@ -181,8 +181,9 @@ npm run build        # production build
 **CAS import (optional — mutual-fund auto-populate from a CAMS/KFintech statement)** needs Python:
 
 ```bash
-python3 -m venv scripts/.venv
-scripts/.venv/bin/pip install -r scripts/requirements.txt   # casparser, MIT parser only — NO mupdf extra
+python3 -m venv --copies scripts/.venv   # --copies: a bin/python symlink out of the project root breaks `next build`
+scripts/.venv/bin/pip install -r scripts/requirements.txt        # casparser (MF CAS), MIT only — NO mupdf extra
+scripts/.venv/bin/pip install -r scripts/requirements-ecas.txt   # pdfplumber (stock eCAS), MIT
 ```
 
 The `POST /api/wealth/import-cas` route shells out to `scripts/cas_parse.py` (sidecar). Without the

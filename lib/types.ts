@@ -21,9 +21,9 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   OTHER: 'Other',
 };
 
-// MANUAL = user-entered, API = AMFI live NAV, CAS = seeded from an uploaded statement (until a
-// later AMFI refresh takes over and flips it to API).
-export const PRICE_SOURCES = ['MANUAL', 'API', 'CAS'] as const;
+// MANUAL = user-entered, API = AMFI live NAV, CAS = MF statement seed, ECAS = depository eCAS stock
+// statement seed (statement-date price; no live stock provider yet — labeled "as of <date>").
+export const PRICE_SOURCES = ['MANUAL', 'API', 'CAS', 'ECAS'] as const;
 export type PriceSource = (typeof PRICE_SOURCES)[number];
 
 // Outcome of the last live-price refresh for an asset. NOT_FOUND = the ticker/scheme code didn't
@@ -31,8 +31,9 @@ export type PriceSource = (typeof PRICE_SOURCES)[number];
 export const PRICE_STATUSES = ['OK', 'NOT_FOUND'] as const;
 export type PriceStatus = (typeof PRICE_STATUSES)[number];
 
-// How a holding entered the app. CAS-sourced rows are the only ones a CAS re-upload may update/flag.
-export const SOURCES = ['MANUAL', 'CAS'] as const;
+// How a holding entered the app. CAS = MF statement (CAMS/KFintech); ECAS = depository stock
+// statement. Each import path only ever update/flags rows of its own source.
+export const SOURCES = ['MANUAL', 'CAS', 'ECAS'] as const;
 export type Source = (typeof SOURCES)[number];
 
 // Whether a CAS-sourced holding appeared in the most recent uploaded statement. ABSENT = flagged

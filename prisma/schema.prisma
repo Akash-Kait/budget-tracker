@@ -39,6 +39,10 @@ model WealthAsset {
   updatedAt      DateTime  @updatedAt
 
   @@index([importKey])
+  // Source-scoped uniqueness: a given importer (CAS folio|amfi, eCAS boId|isin) maps to at most ONE
+  // row — the DB backstop against a duplicate-key double-create. Source-scoped so CAS and eCAS key
+  // spaces stay independent; nullable members (manual rows = null/null) may repeat freely.
+  @@unique([source, importKey])
 }
 
 model PlanItem {

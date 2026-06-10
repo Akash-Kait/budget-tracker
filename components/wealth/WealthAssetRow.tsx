@@ -53,10 +53,17 @@ export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; s
           )}
           {asset.casStatus === 'ABSENT' && (
             <span
-              title="This holding wasn't in your most recently imported CAS. It hasn't been deleted — re-import a statement that includes it, or remove it manually."
+              title="This holding wasn't in your most recently imported statement. It hasn't been deleted — re-import a statement that includes it, or remove it manually."
               className="rounded border border-warning/40 bg-warning-weak px-1.5 py-0.5 text-[10px] font-medium text-warning"
             >
-              not in latest CAS
+              {/* source-aware copy (spec Q4): eCAS stocks vs MF CAS */}
+              {asset.source === 'ECAS' ? 'not in latest eCAS statement' : 'not in latest CAS'}
+            </span>
+          )}
+          {asset.source === 'ECAS' && asset.casStatus !== 'ABSENT' && (
+            // Import-sourced vs manual marker, so the manual-maintenance gap is honest in the UI.
+            <span className="rounded border border-hairline px-1.5 py-0.5 text-[10px] text-faint">
+              from eCAS
             </span>
           )}
         </div>
@@ -76,7 +83,10 @@ export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; s
             ? `NAV as of ${formatDay(asset.priceUpdatedAt)} · end of day`
             : asset.priceSource === 'CAS'
               ? `From CAS · ${formatDay(asset.priceUpdatedAt)}`
-              : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
+              : asset.priceSource === 'ECAS'
+                ? // statement-date price only — no live stock provider yet (spec Q6); honestly not live
+                  `as of ${formatDay(asset.priceUpdatedAt)} · end of day`
+                : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
         {stale && (
           <span
             title="This NAV is older than expected — the feed may not have updated for this scheme."

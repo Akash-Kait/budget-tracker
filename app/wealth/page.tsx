@@ -1,5 +1,6 @@
 import { Panel } from '@/components/wealth/Panel';
 import { CasImportPanel } from '@/components/wealth/CasImportPanel';
+import { EcasImportPanel } from '@/components/wealth/EcasImportPanel';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
 import { WealthKpiCards } from '@/components/wealth/WealthKpiCards';
@@ -17,6 +18,7 @@ import {
   assetCostBasis,
   assetValue,
   assetGainLoss,
+  gainLossStatus,
 } from '@/lib/wealth';
 
 export const dynamic = 'force-dynamic';
@@ -46,10 +48,7 @@ export default async function WealthPage() {
       return {
         name: a.name,
         value: assetValue(a),
-        status: (g === null ? 'none' : g.absolute > 0 ? 'gain' : g.absolute < 0 ? 'loss' : 'none') as
-          | 'gain'
-          | 'loss'
-          | 'none',
+        status: gainLossStatus(a), // 'none' (striped, no P/L) for no-basis stocks; gain/loss otherwise
         glAbsolute: g?.absolute ?? null,
         glPct: g?.pct ?? null,
       };
@@ -131,6 +130,11 @@ export default async function WealthPage() {
           {/* Import from CAS — auto-populate/update mutual funds */}
           <Panel title="Import from CAS">
             <CasImportPanel />
+          </Panel>
+
+          {/* Import from eCAS — auto-populate/update stocks (depository statement) */}
+          <Panel title="Import stocks from eCAS">
+            <EcasImportPanel />
           </Panel>
 
           {/* Add — calm */}

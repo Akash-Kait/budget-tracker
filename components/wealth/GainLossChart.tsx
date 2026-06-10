@@ -32,11 +32,16 @@ export function GainLossChart({ data }: { data: GainLossRow[] }) {
   if (data.length === 0) {
     return <div className="flex h-44 items-center justify-center text-sm text-faint">No holdings.</div>;
   }
-  const height = Math.max(160, data.length * 44);
+  // Each holding gets a fixed row height so labels never compress/overlap; the panel scrolls past a
+  // cap so a long list (e.g. ~17 demat stocks) stays legible instead of cramming into a fixed box.
+  const ROW = 40;
+  const height = Math.max(160, data.length * ROW);
   const hasUnknown = data.some((r) => r.status === 'none');
+  const truncate = (v: string) => (v.length > 20 ? `${v.slice(0, 19)}…` : v); // full name in the tooltip
 
   return (
     <div>
+      <div className="max-h-[440px] overflow-y-auto pr-1">
       <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
         <defs>
@@ -55,7 +60,9 @@ export function GainLossChart({ data }: { data: GainLossRow[] }) {
         <YAxis
           type="category"
           dataKey="name"
-          width={110}
+          width={150}
+          interval={0}
+          tickFormatter={truncate}
           tickLine={false}
           axisLine={false}
           tick={{ fill: 'var(--muted)', fontSize: 12 }}
@@ -97,6 +104,7 @@ export function GainLossChart({ data }: { data: GainLossRow[] }) {
         </Bar>
       </BarChart>
       </ResponsiveContainer>
+      </div>
       {hasUnknown && (
         <p className="mt-2 flex items-center gap-2 text-xs text-faint">
           <span

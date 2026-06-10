@@ -1,0 +1,4 @@
+# eCAS (depository CAS) STOCK-import sidecar dependency. MIT.
+# Separate from casparser (the MF CAS path) — pdfplumber parses the depository eCAS holding table.
+#   scripts/.venv/bin/pip install -r scripts/requirements-ecas.txt
+pdfplumber>=0.11,<1.0
