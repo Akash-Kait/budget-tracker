@@ -1,7 +1,7 @@
 # Stocks Hands-Off — CDSL/NSDL eCAS (DigiLocker) Stock Import — Design Spec
 
-**Date:** 2026-06-10
-**Status:** AWAITING APPROVAL — do not implement until approved. (Spec only; no feature code this session.)
+**Date:** 2026-06-10 (open questions Q1–Q7 settled 2026-06-10)
+**Status:** APPROVED IN SHAPE — answers folded in; **awaiting go-ahead to implement**. (Spec only.)
 **Goal:** Make **stocks** hands-off: auto-populate/update `STOCK` `WealthAsset` rows from the user's
 **CDSL/NSDL eCAS** (the depository consolidated statement), pulled via **DigiLocker**, with the
 statement-date market value as a seed price. Stocks-only. The existing CAMS/KFintech **mutual-fund**
@@ -37,10 +37,10 @@ import-vs-manual distinction in the UI.
    **no math change**). MF/“other” keep their cost basis + gain/loss **untouched**. The temporary
    visible inconsistency (stocks no P/L, MFs P/L) is **accepted**; a product-wide gain/loss decision
    is **explicitly out of scope/deferred**.
-5. **Current-price refresh = a live-quote provider behind the existing `PriceProvider` seam**,
-   env-gated like `MARKET_DATA_PROVIDER`, same stale / NOT_FOUND / honest as-of labeling as AMFI. eCAS
-   price is seed/fallback; the live provider refreshes between statements. ISIN↔exchange-symbol
-   mapping = a visible NOT_FOUND, not a silent gap. **→ recommended as its own follow-up spec (below).**
+5. **Current-price refresh = a live-quote provider behind the existing `PriceProvider` seam** — **SPLIT
+   into its own follow-up spec (Q6).** This task ships **import only**: it uses the **eCAS
+   statement-date price ONLY**, labeled **"as of <statement date> · end of day"** and visibly **NOT
+   live** — the absence of a live provider must read as honest, never as a fresh quote.
 
 ## Non-negotiable constraints (carried into design)
 
@@ -98,7 +98,27 @@ neutral `importStatus`).
 
 ---
 
-## Input design (two clearly-separated paths)
+## The normalized seam (Q1 — both inputs converge; reconcile never forks per source)
+
+A single normalized interface is the contract between *any* input source and reconcile, so DigiLocker
+(Phase 2) swaps in **behind the same entry point** with no change to reconcile/route:
+
+```ts
+interface EcasHolding { isin: string; name: string; units: number | null; price: number | null; value: number | null }
+interface EcasAccount { boId: string; holdings: EcasHolding[] }          // one demat account (BO ID)
+interface EcasParsed {
+  statementDate: string | null;
+  accounts: EcasAccount[];
+  unrecognized: { isin: string; name: string }[];   // Q7 — ISINs neither INE* nor INF* (surfaced, not dropped)
+}
+```
+
+Both the **pdfplumber sidecar** (Phase 1) and the **DigiLocker structured pull** (Phase 2) produce
+`EcasParsed`; `reconcile(existing, parsed)` and the route consume only this. **There is one reconcile
+path; the input source is interchangeable behind `EcasParsed`.** (Phase 2 is a different *producer*
+of `EcasParsed`, not a different consumer.)
+
+## Input design (two clearly-separated producers of `EcasParsed`)
 
 ### A. DigiLocker pull — PRIMARY (structured-first)
 - Server-side OAuth2 to DigiLocker; fetch the issued CDSL/NSDL eCAS document. Credentials
@@ -117,16 +137,22 @@ neutral `importStatus`).
   **stdin** (password first line — never argv/env), in-memory, temp-file fallback unlinked in
   `finally`, structured `{error,detail}` exits, never logs PDF/PII.
 - **ISIN-anchored positional parse:** scan extracted rows; a holding row is one whose first cell
-  matches `^IN[EF][A-Z0-9]{9}$`. Take columns **positionally** (ISIN, name, current-bal, …, market
-  price, value) — **ignore the garbled header entirely**. Emit a trimmed JSON
-  `{ statementDate, boId, holdings:[{isin, name, units, price, value}] }` per BO ID.
-- **INE-only filter (decision #2):** the parser (or reconcile) keeps **`INE*` only**; `INF*` rows are
-  dropped. This is the double-count guard → regression test (a).
+  matches a **general Indian ISIN** `^IN[A-Z0-9]{10}$` (broad on purpose — see classification). Take
+  columns **positionally** (ISIN, name, current-bal, …, market price, value) — **ignore the garbled
+  header entirely**.
+- **Three-way ISIN classification (Q7 — never a silent filter):** classify each holding row by ISIN:
+  - `INE*` → **equity → import**.
+  - `INF*` → **mutual fund → skip** (tracked via the CAMS/KFintech path; importing would double-count,
+    decision #2). This skip is expected; report a count, don't surface as an error.
+  - **neither `INE*` nor `INF*`** → **unrecognized → NOT imported, but surfaced** in
+    `EcasParsed.unrecognized` and reported in the result as "unrecognized security — not imported
+    (<isin>)". Never silently dropped. → regression test (h).
+- The double-count guard (`INF*` never imported) → regression test (a).
 - pdfplumber added to a **new** `scripts/requirements-ecas.txt` (or extend `requirements.txt`) — MIT.
   (Note: the MF path's optional PyMuPDF is unrelated.)
 
-Both paths converge on the same normalized `{ statementDate, accounts:[{boId, holdings:[…]}] }` shape,
-Zod-validated at the sidecar/DigiLocker boundary before reconcile sees it.
+Both producers emit `EcasParsed` (above), Zod-validated at the sidecar/DigiLocker boundary before
+reconcile sees it.
 
 ---
 
@@ -135,7 +161,8 @@ Zod-validated at the sidecar/DigiLocker boundary before reconcile sees it.
 Input: existing assets + normalized eCAS (all BO IDs) + statement date. Considers **only
 `type === 'STOCK'`** rows. Steps:
 
-1. **Filter incoming to `INE*`** (drop `INF*` — MF double-count guard).
+1. **Import `INE*` equities only.** `INF*` is skipped (MF double-count guard); unrecognized ISINs
+   are carried through in `EcasParsed.unrecognized` and reported, **never silently dropped** (Q7).
 2. **Match** each incoming holding by `importKey` to an existing stock; also match an existing row
    whose `ticker === isin` (adopt a hand-entered stock).
    - **Found + `source==='ECAS'`** → update `quantity`, `pricePerUnit`, `priceUpdatedAt`,
@@ -143,9 +170,12 @@ Input: existing assets + normalized eCAS (all BO IDs) + statement date. Consider
    - **Found + manual (adopt, MERGE)** → update units/price/source/key ONLY; preserve user
      `name`/`costBasis`/`value`/`purchaseDate`.
    - **Not found** → create `type:'STOCK'`, `source:'ECAS'`, `costBasis:null`, `casStatus:'CURRENT'`.
-3. **Flag absent:** any `source==='ECAS'` stock **not** present in this statement (across **all** BO
-   IDs) → `casStatus='ABSENT'`. Covers the **Nil-Holding BO ID** case (an emptied demat account →
-   all its stocks absent → flagged, never deleted).
+3. **Flag absent (per `boId|isin`):** any `source==='ECAS'` stock whose `importKey` is **not** in this
+   statement → `casStatus='ABSENT'` (never deleted). Because the key is per-account, this correctly
+   handles **(i)** an emptied demat account (**Nil-Holding BO ID** → all its stocks flagged), and
+   **(ii)** the same ISIN held in two BO IDs where one statement drops it → **only the dropped
+   account's row is flagged; the other account's row is untouched** (Q3 — the case most likely to hide
+   a flag-vs-delete bug; regression test (i)).
 4. **Never touch** non-`STOCK` rows, `INF*`, or `source!=='ECAS'` rows that don't match.
 5. **Older-statement guard** (mirror CAS P0): if the eCAS statement date is older than the newest
    `priceUpdatedAt` among `source==='ECAS'` stocks → **reject (409)**, so a stale upload can't rewind
@@ -156,22 +186,23 @@ Input: existing assets + normalized eCAS (all BO IDs) + statement date. Consider
 Apply the resulting `{creates, updates, flaggedAbsent}` plan in one `prisma.$transaction` (mirrors the
 CAS route).
 
-**Match key (Q3):** ISIN alone **collides** when the same security sits in **two BO IDs** (same class
-of bug as the MF two-folio collision we fixed by folio-qualifying). **Recommended:**
-`importKey = `${boId}|${isin}`` (per-account positions stay distinct, idempotent); `ticker` stays the
-bare ISIN for the live provider. **Alternative:** aggregate one ISIN across accounts into a single
-summed position. Surfaced for decision (Q3).
+**Match key (Q3 — DECIDED): `importKey = `${boId}|${isin}`` (per-account).** Storage + reconcile keep
+per-account granularity; `ticker` stays the **bare ISIN** (live-provider lookup key, Phase 2). Aggregate-
+by-ISIN is **rejected** — it erases which account holds what and breaks flag-absent when one account
+drops a holding another still holds. The **dashboard MAY sum the same ISIN across BO IDs for DISPLAY**,
+but that is a presentation concern only; storage/reconcile never aggregate. Mirrors the CAS folio-
+qualified key fix.
 
 ---
 
-## Live stock-quote provider (point 5 — high level; recommend follow-up spec)
+## Live stock-quote provider — OUT OF SCOPE (Q6 — own follow-up spec)
 
-Add a stock provider behind the existing `PriceProvider` seam (`getQuote`/`getQuotes`), selected by an
-env flag alongside `MARKET_DATA_PROVIDER` (e.g. a stocks-specific gate). `refresh-prices` would route
-`STOCK` tickers (ISINs) to it; eCAS price is the seed, the provider refreshes between statements; same
-**stale** (business-day) + **NOT_FOUND** + "as of … · end of day" handling as AMFI. **ISIN→exchange
-symbol** mapping is the crux and is surfaced as a visible **NOT_FOUND** when unresolved. Detailed
-design (quote source, mapping table/API, rate limits) → **follow-up spec** to keep this review focused.
+Deferred to a separate spec to keep this review surface small. **This task ships import only.** Until
+that lands, a stock's price is the **eCAS statement-date price ONLY**, stored `priceSource='ECAS'` and
+rendered **"as of <statement date> · end of day"** — visibly **not** a live quote. The honest "no live
+provider yet" reading is a **requirement**, not an omission (Q6) → UI test (k). The follow-up adds the
+provider behind the existing `PriceProvider` seam (ISIN→exchange-symbol mapping as a visible
+NOT_FOUND), reusing the AMFI stale/NOT_FOUND machinery.
 
 ---
 
@@ -179,11 +210,15 @@ design (quote source, mapping table/API, rate limits) → **follow-up spec** to 
 
 - **Stocks render NO gain/loss** — automatic: `costBasis=null` → `assetGainLoss` returns `null` →
   `GainLossText` renders nothing. **No change to `lib/wealth.ts`, MF, or “other”.**
-- **Import-sourced vs manual badge** (decision/constraint): in `WealthAssetRow`, show a small
-  source marker for `source==='ECAS'` stocks (e.g. "from eCAS") distinct from manual, so the
-  maintenance gap is visible. Price line: `priceSource==='ECAS'` → **"as of <date> · end of day"**.
-- **Absent flag:** reuse the amber pill, copy made source-aware — "not in latest statement" for
-  stocks vs the existing "not in latest CAS" for MF (Q4).
+- **Import-sourced vs manual badge** (constraint): in `WealthAssetRow`, show a small source marker for
+  `source==='ECAS'` stocks (e.g. "from eCAS") distinct from manual, so the maintenance gap is honest.
+- **Price line is honestly NOT live (Q6):** `priceSource==='ECAS'` → **"as of <statement date> · end
+  of day"** — same restraint as AMFI, no "live"/fresh implication. → UI test (k).
+- **Absent flag — source-aware copy (Q4, REQUIRED):** reuse the amber pill + `casStatus`, but the
+  wording is keyed off `source`: eCAS stocks read **"not in latest eCAS statement"**, MF rows keep
+  **"not in latest CAS"**. Same column, honest but distinct text. → test (j).
+- **Unrecognized securities (Q7):** the import result surfaces "N unrecognized securities — not
+  imported (<isin>…)" as a visible warning (not a silent skip); these create no rows.
 - A `EcasImportPanel` (or extend the CAS panel) on `/wealth` — upload eCAS PDF (+ optional password) /
   or "Connect DigiLocker" (Phase 2). MF/other UI untouched.
 
@@ -221,33 +256,54 @@ Regression tests called out in the brief, plus parser/reconcile/route coverage:
 - **(f) `lib/finance.ts` has no wealth imports** — grep assertion (and ecas imports no finance).
 - **(g) MF/other gain/loss display unchanged** — assert `assetGainLoss`/`totalGainLoss` outputs for MF
   fixtures are byte-for-byte unchanged; stocks with `costBasis=null` yield `null` (no P/L).
-- **Parser:** ISIN-anchored positional extraction on a synthetic 9-column sample (incl. garbled
-  header skipped, INF row dropped, multi-BO-ID, a Nil-Holding account); `test_ecas_parse.py`
-  (zero-dep `python3` run, like `test_cas_parse.py`).
+- **(h) Unrecognized ISIN surfaced, not dropped (Q7)** — a row whose ISIN is **neither `INE*` nor
+  `INF*`** appears in `EcasParsed.unrecognized` and the import result, creates **no** row, and is
+  **not** silently skipped.
+- **(i) Two BO IDs, same ISIN, dropped from one (Q3) — the flag-vs-delete trap** — hold ISIN X in BO-A
+  and BO-B; re-import a statement that omits X from BO-B only → `boId-B|X` → `casStatus='ABSENT'`
+  (never deleted), `boId-A|X` **untouched** (still CURRENT, units intact). No row merged/lost across
+  accounts. *(The deep review must specifically attempt to break this.)*
+- **(j) Source-aware absent copy (Q4)** — an `ABSENT` stock (`source='ECAS'`) renders "not in latest
+  eCAS statement"; an `ABSENT` MF (`source='CAS'`) still renders "not in latest CAS". Same column,
+  different text keyed off `source`.
+- **(k) Price reads as NOT live (Q6)** — an eCAS-seeded stock (`priceSource='ECAS'`) renders "as of
+  <statement date> · end of day" with no live/fresh implication; no live-provider code path exists yet.
+- **Parser:** ISIN-anchored positional extraction on a synthetic 9-column sample (garbled header
+  skipped, INF row dropped, **unrecognized-prefix row surfaced**, multi-BO-ID, a Nil-Holding account);
+  `scripts/test_ecas_parse.py` (zero-dep `python3` run, like `test_cas_parse.py`).
 - **Older-statement guard** → 409 (mirror CAS P0).
 
-## Open questions / inferred architecture (please confirm)
+## Resolved decisions (Q1–Q7, settled 2026-06-10)
 
-- **Q1 — DigiLocker API access.** The pull API needs DigiLocker **partner/Requester** credentials. Do
-  you have/intend to obtain them? **Recommendation:** Phase 1 = manual eCAS PDF upload (validated
-  parser, fully testable now); DigiLocker auto-pull = Phase 2 once creds exist (same route/reconcile).
-- **Q2 — eCAS PDF password.** A DigiLocker-issued eCAS may be unprotected; the emailed CDSL eCAS is
-  PAN+DOB-protected. Plan: reuse the optional-password stdin protocol (works either way). Confirm.
-- **Q3 — Stock match key.** Recommend `boId|isin` (per-account, avoids the two-account collision);
-  alternative is aggregate-by-ISIN. Which do you want?
-- **Q4 — Reuse `casStatus`/add value vs new `importStatus` column.** Recommend reusing
-  `casStatus` (CURRENT/ABSENT) + `source='ECAS'` (no migration), with source-aware UI copy. OK, or
-  prefer a neutral column rename (touches MF code — I'd avoid)?
-- **Q5 — Parser dep & sidecar.** New `scripts/ecas_parse.py` with **pdfplumber** (MIT), separate from
-  casparser. Confirm pdfplumber (vs reusing PyMuPDF, which we kept as an opt-in for MF).
-- **Q6 — Split the live-quote provider (point 5) into its own follow-up spec?** Recommended.
-- **Q7 — Same ISIN appearing as both INE and INF?** Not expected (different prefixes = different
-  instruments); INE-only filter handles it. Flagging in case your statement showed otherwise.
+- **Q1 — DigiLocker:** Phase 1 = manual eCAS PDF upload (ships now); DigiLocker auto-pull = Phase 2.
+  **Requirement:** both produce the same `EcasParsed`; **one reconcile entry point**, no per-source
+  fork (the normalized seam, above).
+- **Q2 — Password:** reuse the existing optional-password stdin protocol (protected or not).
+- **Q3 — Match key:** **`boId|isin`** (per-account). Aggregate-by-ISIN rejected. Dashboard may sum
+  across BO IDs for **display** only. Regression test (i).
+- **Q4 — Absent flag:** reuse `casStatus` + `source='ECAS'`, **no migration**; UI copy **source-aware**.
+  Regression test (j).
+- **Q5 — Parser:** new `scripts/ecas_parse.py` + **pdfplumber** (MIT), separate from casparser;
+  `lib/cas/` and the casparser sidecar untouched.
+- **Q6 — Live-quote provider:** **split into a follow-up spec.** This task = import only; price is the
+  statement-date value, labeled NOT live. Regression test (k).
+- **Q7 — ISIN classification:** `INE*` import / `INF*` skip / **neither → visible "unrecognized — not
+  imported"**, never a silent filter. Regression test (h).
+
+## Deep review (before commit) — must-break target
+
+The review **must specifically attempt to break the `boId|isin` reconcile** with the two-account
+scenario (same ISIN in BO-A and BO-B, dropped from one statement) — the case most likely to hide a
+flag-vs-delete or cross-account-merge bug, and one that **won't appear while only one account is
+funded**. Plus the usual: INF/unrecognized handling, adoption-merge, idempotency, older-statement
+guard, firewall, no PDF/PII logging. Each fix lands with the regression test that would have caught it.
 
 ---
 
-**On approval:** branch already cut (`feat/ecas-stock-import`); I implement Phase 1 (PDF parser +
-reconcile + route + UI + tests), then a **deep review before commit** (external-PDF/DigiLocker +
-credentials + money-values trust boundary), each fix landing with the regression test that would have
-caught it. DigiLocker auto-pull (Phase 2) and the live-quote provider (point 5) per your answers to
-Q1/Q6.
+**On your go-ahead:** branch already cut (`feat/ecas-stock-import`); I implement **Phase 1 only** — the
+manual eCAS-PDF-upload path: `ecas_parse.py` (pdfplumber, ISIN-anchored, three-way classification) →
+`EcasParsed` seam → reconcile (`boId|isin`, INE-only, flag-absent, adoption-merge, older-statement
+guard) → route → UI (source badge, "as of <date> · end of day", source-aware absent copy, unrecognized
+warning) → the (a)–(k) tests. Then the **deep review before commit** with the `boId|isin` two-account
+case as the explicit must-break target. **Out of this task:** DigiLocker auto-pull (Phase 2, behind the
+same `EcasParsed` seam) and the live-quote provider (its own follow-up spec).
