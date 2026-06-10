@@ -121,6 +121,20 @@ must-break.
   always treated as possibly-user-adjusted → preserve + surface, never auto-adopt. (A future
   `costBasisSource`/`costBasisManual` flag could enable auto-adopt for never-touched rows; out of scope.)
 
+**Partial-match hardening — DECIDED (Q2-adjacent, the dangerous case):** AMFI reachable but **one
+fund's ISIN not found in the feed** (new fund / changed ISIN / per-scheme hiccup) → preview shows
+4/5 matched, 1 unmatched. "Mostly right" invites a confirm — and if apply then **creates** the
+unmatched row, that fund exists as BOTH the old CAS row AND a new eCAS row = **double-count on a real
+holding.** Contract:
+- **In a MIGRATION context (any `source='CAS'` MUTUAL_FUND rows exist), an unmatched eCAS folio row is
+  NEVER created** — those funds are known to exist as CAS rows, so unmatched means the
+  `folio|amfi ↔ folio|ISIN` bridge FAILED for that fund: an **error to resolve, not new inventory**.
+  The apply is **blocked** (or that row quarantined for explicit per-row action) — never a silent create.
+- **In a genuine FIRST import (no prior CAS MUTUAL_FUND rows), an unmatched fund IS a legitimate
+  create.** The create-on-unmatched path is **gated on migration-vs-first-import**, not uniform.
+- The **preview visually distinguishes three buckets — `matched` / `unmatched-blocking` / `new
+  (first-import only)`** — so a partial-match migration cannot be confirmed into a double-count.
+
 **Non-destructive & reversible:** on confirmation, migration is an in-place **update** (CAS row →
 `source` flips to `ECAS`, `importKey`→`folio|ISIN`, `ticker`→ISIN, units/NAV/value refreshed, costBasis
 per Q3) — **no deletes**. The prior `source='CAS'`/`importKey=folio|amfi`/`ticker=amfi` are recorded so
@@ -171,6 +185,11 @@ parser.
   And: an ISIN the feed can't resolve → surfaced unmatched in the preview, **not** auto-created.
 - **(c3) preview is blocking:** phase-1 returns the preview with **zero DB writes**; nothing is written
   without explicit confirmation (assert no `create`/`update` before confirm).
+- **(c4) PARTIAL-match migration (the dangerous case — named must-break):** migration with 4 matched +
+  1 ISIN-not-in-feed → apply is **blocked** (or that row quarantined); the unmatched fund is **NOT
+  created**; **no double-count**. AND: a genuine first-time import (no prior CAS MF rows) with an
+  unmatched fund → it **IS created** (the create path still works when it should). Create-on-unmatched
+  is gated on migration-vs-first-import.
 - **(d) reconcile discipline:** absent fund flagged not deleted; idempotent re-import (no dupes);
   older-statement guard (409) / undateable (422).
 - **(e) semantic reconciliation:** `costBasis = amount_invested` → `lib/wealth` P/L equals the eCAS
