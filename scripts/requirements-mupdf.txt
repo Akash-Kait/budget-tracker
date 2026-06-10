@@ -1,0 +1,15 @@
+# OPTIONAL — install ONLY if CAS import returns "0 new · 0 updated" with the default MIT parser.
+#
+# casparser uses PyMuPDF ("mupdf") for PDF text extraction when it's installed, and falls back to
+# the MIT pdfminer parser otherwise. Some CAMS/KFintech statement layouts (esp. summary tables)
+# extract correctly only under mupdf — pdfminer returns the table headers but no holding rows
+# (folios parse as empty), which surfaces as a successful import of 0 holdings.
+#
+# ⚠ PyMuPDF is AGPL-3.0. It is deliberately NOT in scripts/requirements.txt so the default install
+#   stays MIT-only (and reload/CI never pull a copyleft dep). Installing it is a per-user choice
+#   that's appropriate for personal, self-hosted, non-distributed use. Do NOT bundle it into a
+#   distributed/hosted build without satisfying AGPL.
+#
+# Install (no code change — casparser auto-detects and prefers mupdf once present):
+#   scripts/.venv/bin/pip install -r scripts/requirements-mupdf.txt
+PyMuPDF

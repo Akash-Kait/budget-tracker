@@ -190,6 +190,13 @@ venv it falls back to `python3`; if neither has `casparser`, the route returns a
 rest of the app is unaffected. The PDF + password are processed in-memory server-side and never
 stored or logged.
 
+**If import succeeds but reports "0 new · 0 updated":** casparser's default MIT `pdfminer` parser
+couldn't extract this statement's holdings table (it finds the column headers but no rows). casparser
+prefers **PyMuPDF ("mupdf")** when installed, which handles more layouts. PyMuPDF is **AGPL-3.0**, so
+it's intentionally kept out of `requirements.txt`; for personal/self-hosted use you can opt in with
+`scripts/.venv/bin/pip install -r scripts/requirements-mupdf.txt` (no code change — casparser
+auto-detects it). Don't bundle it into a distributed build without satisfying AGPL.
+
 ## 9. Constraints / gotchas (for whoever works on this next)
 
 - **No auth** by design; `FinancialProfile` is a singleton. Multi-user is a deliberate future step.
