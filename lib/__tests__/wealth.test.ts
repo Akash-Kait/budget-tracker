@@ -164,11 +164,11 @@ describe('totalGainLoss', () => {
   });
 });
 
-describe('gainLossStatus (chart striped-vs-coloured decision)', () => {
-  it('a no-cost-basis holding (e.g. an imported eCAS stock) is "none" → striped, no P/L', () => {
+describe('gainLossStatus (gain / loss / none)', () => {
+  it('a no-cost-basis holding (e.g. an imported eCAS stock) is "none"', () => {
     expect(gainLossStatus(asset({ quantity: 5, pricePerUnit: 9997.75, costBasis: null }))).toBe('none');
   });
-  it('holdings WITH a cost basis show gain/loss (MF/other bars unchanged)', () => {
+  it('holdings WITH a cost basis show gain/loss', () => {
     expect(gainLossStatus(asset({ quantity: 10, pricePerUnit: 150, costBasis: 1000 }))).toBe('gain'); // 1500 > 1000
     expect(gainLossStatus(asset({ quantity: 10, pricePerUnit: 50, costBasis: 1000 }))).toBe('loss'); // 500 < 1000
   });

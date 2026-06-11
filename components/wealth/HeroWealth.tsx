@@ -10,38 +10,18 @@ interface Alloc {
   color: string;
 }
 
+// Value-only hero: the headline is Total Wealth — a figure true for ALL holdings. Portfolio gain/loss
+// is deliberately NOT shown here: cost basis exists for only a subset (the folio MFs), so a top-level
+// % would misrepresent partial-coverage data as a portfolio return. Per-holding gain/loss still shows
+// on the individual MF rows where it's legitimate; the math stays in lib/wealth for that + future use.
 export function HeroWealth({
   total,
-  gl,
-  covered,
-  count,
   allocation,
 }: {
   total: number;
-  gl: { absolute: number; pct: number | null } | null;
-  covered: number;
-  count: number;
   allocation: Alloc[];
 }) {
   const totalShown = useCountUp(total);
-  const glShown = useCountUp(gl?.absolute ?? 0);
-  const partial = covered > 0 && covered < count;
-
-  const glColor =
-    gl === null
-      ? 'text-faint'
-      : gl.absolute > 0
-        ? 'text-positive'
-        : gl.absolute < 0
-          ? 'text-negative'
-          : 'text-muted';
-  const sign = gl === null || gl.absolute === 0 ? '' : gl.absolute > 0 ? '+' : '−';
-  const pctText =
-    gl === null
-      ? ''
-      : gl.pct === null
-        ? ' (—)'
-        : ` (${gl.pct > 0 ? '+' : gl.pct < 0 ? '−' : ''}${Math.abs(gl.pct)}%)`;
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-hairline bg-surface p-8">
@@ -59,14 +39,6 @@ export function HeroWealth({
       </div>
       <p className="relative mt-3 font-sans text-5xl font-bold tabular-nums tracking-tight text-text sm:text-6xl">
         {formatINR(totalShown)}
-      </p>
-      <p className={`relative mt-2 font-sans text-lg font-semibold tabular-nums ${glColor}`}>
-        {gl === null ? '— cost basis not set' : `${sign}${formatINR(Math.abs(glShown))}${pctText}`}
-        {partial && gl !== null && (
-          <span className="ml-2 font-sans text-xs text-faint">
-            based on {covered} of {count} holdings
-          </span>
-        )}
       </p>
       {allocation.length > 0 && (
         <div className="relative mt-6 flex h-2 w-full overflow-hidden rounded-full bg-surface-2">

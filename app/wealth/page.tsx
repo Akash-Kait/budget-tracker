@@ -6,7 +6,7 @@ import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
 import { WealthKpiCards } from '@/components/wealth/WealthKpiCards';
 import { HeroWealth } from '@/components/wealth/HeroWealth';
 import { AllocationChart } from '@/components/wealth/AllocationChart';
-import { GainLossChart, type GainLossRow } from '@/components/wealth/GainLossChart';
+import { TreemapChart } from '@/components/wealth/TreemapChart';
 import { wealthTypeColor } from '@/lib/colors';
 import { isStale } from '@/lib/market/staleness';
 import { getWealthAssets } from '@/lib/data';
@@ -14,11 +14,7 @@ import {
   groupByType,
   totalWealth,
   allocationByType,
-  totalGainLoss,
-  assetCostBasis,
   assetValue,
-  assetGainLoss,
-  gainLossStatus,
 } from '@/lib/wealth';
 
 export const dynamic = 'force-dynamic';
@@ -40,20 +36,20 @@ export default async function WealthPage() {
     pct: a.pct,
     color: wealthTypeColor(a.type),
   }));
-  const gl = totalGainLoss(assets);
-  const covered = assets.filter((a) => assetCostBasis(a) !== null).length;
-  const glRows: GainLossRow[] = assets
-    .map((a) => {
-      const g = assetGainLoss(a);
-      return {
-        name: a.name,
-        value: assetValue(a),
-        status: gainLossStatus(a), // 'none' (striped, no P/L) for no-basis stocks; gain/loss otherwise
-        glAbsolute: g?.absolute ?? null,
-        glPct: g?.pct ?? null,
-      };
-    })
-    .sort((a, b) => b.value - a.value);
+  // Treemap of ALL holdings: area ∝ current value, grouped + coloured by asset type (no cost basis
+  // needed). Nesting clusters same-type holdings so the type split reads at a glance. Zero-value
+  // holdings can't be sized, so they're omitted here (they still show in the holdings list).
+  const treemapData = groups
+    .map((g) => ({
+      name: g.label,
+      children: g.assets
+        .map((a) => ({ name: a.name, value: assetValue(a), fill: wealthTypeColor(g.type) }))
+        .filter((c) => c.value > 0),
+    }))
+    .filter((g) => g.children.length > 0);
+  const treemapLegend = groups
+    .filter((g) => g.subtotal > 0)
+    .map((g) => ({ label: g.label, color: wealthTypeColor(g.type), value: g.subtotal }));
 
   return (
     <div className="space-y-8">
@@ -89,7 +85,7 @@ export default async function WealthPage() {
       ) : (
         <>
           {/* HERO — the single loud element (count-up + glow) */}
-          <HeroWealth total={total} gl={gl} covered={covered} count={assets.length} allocation={allocation} />
+          <HeroWealth total={total} allocation={allocation} />
 
           {/* Supporting trio — calm */}
           <WealthKpiCards assets={assets} />
@@ -99,8 +95,8 @@ export default async function WealthPage() {
             <Panel title="Allocation by type">
               <AllocationChart data={allocation} total={total} />
             </Panel>
-            <Panel title="Value & gain/loss by holding">
-              <GainLossChart data={glRows} />
+            <Panel title="Holdings by value">
+              <TreemapChart data={treemapData} legend={treemapLegend} />
             </Panel>
           </div>
 
