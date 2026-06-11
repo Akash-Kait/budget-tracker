@@ -10,10 +10,10 @@ interface Alloc {
   color: string;
 }
 
-// Value-only hero: the headline is Total Wealth — a figure true for ALL holdings. Portfolio gain/loss
-// is deliberately NOT shown here: cost basis exists for only a subset (the folio MFs), so a top-level
-// % would misrepresent partial-coverage data as a portfolio return. Per-holding gain/loss still shows
-// on the individual MF rows where it's legitimate; the math stays in lib/wealth for that + future use.
+// Value-only hero: the headline is Total Wealth — a figure true for ALL holdings. Gain/loss is NOT
+// shown anywhere in the wealth UI (value-framed dashboard): cost basis exists for only a subset, so a
+// portfolio % would misrepresent partial-coverage data. The cost-basis DATA + lib/wealth gain/loss
+// math are kept (dormant) — hidden, not deleted, so a future toggle can re-show it without re-import.
 export function HeroWealth({
   total,
   allocation,

@@ -2,8 +2,8 @@ import { Money } from '@/components/Money';
 import { assetValue, largestHolding } from '@/lib/wealth';
 import type { WealthAsset } from '@/lib/types';
 
-// Supporting trio — deliberately calm (no glow, no entrance motion); Total Wealth & Gain/Loss live in
-// the hero so these recede beneath it.
+// Supporting trio — deliberately calm (no glow, no entrance motion); Total Wealth leads in the hero so
+// these recede beneath it. Value-framed: no gain/loss anywhere (cost-basis data kept, not displayed).
 function Kpi({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-hairline bg-surface p-5 transition-colors hover:border-hairline-strong">
