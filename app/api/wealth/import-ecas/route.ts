@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { withErrorHandling } from '@/lib/handler';
 import { runEcasParser, EcasError, type EcasErrorCode } from '@/lib/ecas/sidecar';
 import { reconcile } from '@/lib/ecas/reconcile';
+import { displayNameForType } from '@/lib/wealth';
 import type { ExistingStockAsset } from '@/lib/ecas/types';
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
@@ -79,8 +80,18 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   const plan = reconcile(existing, parsed);
 
   await prisma.$transaction(async (tx) => {
-    for (const c of plan.creates) await tx.wealthAsset.create({ data: c });
-    for (const u of plan.updates) await tx.wealthAsset.update({ where: { id: u.id }, data: u.data });
+    // displayName (clean chart name) is derived + stored at import; never overwrites `name`.
+    for (const c of plan.creates)
+      await tx.wealthAsset.create({ data: { ...c, displayName: displayNameForType(c.name, 'STOCK') } });
+    for (const u of plan.updates)
+      await tx.wealthAsset.update({
+        where: { id: u.id },
+        // Only (re)derive displayName when this update carries a name (eCAS-sourced rows); an adopted
+        // manual row keeps its own name → leave its displayName for the read-time backfill.
+        data: typeof u.data.name === 'string'
+          ? { ...u.data, displayName: displayNameForType(u.data.name, 'STOCK') }
+          : u.data,
+      });
     for (const f of plan.flaggedAbsent) {
       await tx.wealthAsset.update({ where: { id: f.id }, data: { casStatus: 'ABSENT' } });
     }

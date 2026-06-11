@@ -4,6 +4,7 @@ import { withErrorHandling } from '@/lib/handler';
 import { runEcasMfParser, EcasError, type EcasErrorCode } from '@/lib/ecas/sidecar';
 import { planMfImport } from '@/lib/ecas/mf-reconcile';
 import { resolveAmfiCodes } from '@/lib/market/amfi';
+import { displayNameForType } from '@/lib/wealth';
 import type { ExistingMfAsset } from '@/lib/ecas/mf-types';
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
@@ -179,8 +180,14 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   }
 
   await prisma.$transaction(async (tx) => {
-    for (const c of plan.creates) await tx.wealthAsset.create({ data: c });
-    for (const m of plan.matched) await tx.wealthAsset.update({ where: { id: m.id }, data: m.data });
+    // displayName (clean chart name) is derived + stored at import; never overwrites `name`.
+    for (const c of plan.creates)
+      await tx.wealthAsset.create({ data: { ...c, displayName: displayNameForType(c.name, 'MUTUAL_FUND') } });
+    for (const m of plan.matched)
+      await tx.wealthAsset.update({
+        where: { id: m.id },
+        data: { ...m.data, displayName: displayNameForType(m.data.name as string, 'MUTUAL_FUND') },
+      });
     for (const f of plan.flaggedAbsent) {
       await tx.wealthAsset.update({ where: { id: f.id }, data: { casStatus: 'ABSENT' } });
     }

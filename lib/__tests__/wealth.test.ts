@@ -10,6 +10,8 @@ import {
   totalCostBasis,
   totalGainLoss,
   gainLossStatus,
+  shortHoldingName,
+  cleanMfName,
 } from '@/lib/wealth';
 import type { WealthAsset } from '@/lib/types';
 
@@ -31,10 +33,47 @@ function asset(p: Partial<WealthAsset>): WealthAsset {
     importKey: null,
     casStatus: null,
     costBasis: null,
+    displayName: 'a',
     purchaseDate: null,
     ...p,
   };
 }
+
+describe('shortHoldingName (clean display name for charts)', () => {
+  it('truncates real eCAS stock names at "#" or the separator dash', () => {
+    expect(shortHoldingName('STATE BANK OF INDIA # NEW EQUITY SHARES OF FV RE. 1/- AFTER SUBDIVISION')).toBe('STATE BANK OF INDIA');
+    expect(shortHoldingName('ADANI POWER LIMITED#NEW EQUITY SHARES WITH FACE VALUE RS.2/- AFTER SUB-DIVISION')).toBe('ADANI POWER LIMITED');
+    expect(shortHoldingName('BAJAJ AUTO LIMITED - EQUITY SHARES')).toBe('BAJAJ AUTO LIMITED');
+    expect(shortHoldingName('BHARTI AIRTEL LIMITED - EQUITY SHARES OF RE 5/- AFTER SUB-DIVISION')).toBe('BHARTI AIRTEL LIMITED');
+    expect(shortHoldingName('ADANI PORTS AND SPECIAL ECONOMIC ZONE LIMITED- NEW EQUITY SHARES OF RS. 2/- AFTER SUB-DIVISION')).toBe('ADANI PORTS AND SPECIAL ECONOMIC ZONE LIMITED');
+  });
+  it('applies the same rule to MF (demat) names → the AMC name', () => {
+    expect(shortHoldingName('SBI FUNDS MANAGEMENT LIMITED#SBI MF-SBI GOLD FUND DIRECT PL GROWTH')).toBe('SBI FUNDS MANAGEMENT LIMITED');
+  });
+  it('falls back to the FULL name when there is no delimiter', () => {
+    expect(shortHoldingName('INFOSYS LIMITED EQUITY')).toBe('INFOSYS LIMITED EQUITY');
+  });
+  it('is the rule used for stocks (not MFs — those have their own rule)', () => {
+    expect(shortHoldingName('INFOSYS LIMITED EQUITY')).toBe('INFOSYS LIMITED EQUITY');
+  });
+});
+
+describe('cleanMfName (clean MF display name — code prefix + plan suffix stripped)', () => {
+  it('folio MF names → the scheme name (leading code + trailing plan dropped, case preserved)', () => {
+    expect(cleanMfName('TPDG - quant ELSS Tax Saver Fund - Direct Plan - Growth')).toBe('quant ELSS Tax Saver Fund');
+    expect(cleanMfName('TSD1 - Mirae Asset ELSS Tax Saver Fund (formerly Mirae Asset Tax Saver Fund ) - Direct Plan')).toBe('Mirae Asset ELSS Tax Saver Fund');
+    expect(cleanMfName('IBDG - quant Small Cap Fund - Direct Plan Growth')).toBe('quant Small Cap Fund');
+    expect(cleanMfName('ETDG - Canara Robeco ELSS Tax Saver Fund - Direct Growth')).toBe('Canara Robeco ELSS Tax Saver Fund');
+    expect(cleanMfName('8019 - ICICI Prudential Technology Fund - Direct Plan - Growth')).toBe('ICICI Prudential Technology Fund');
+  });
+  it('demat AMC#scheme names → the scheme after "#", "MF-" prefix + plan suffix dropped, title-cased', () => {
+    expect(cleanMfName('MOTILAL OSWAL AMC LTD#MOTILAL OSWAL MF- MOTILAL OSWAL NIFTY 50 INDEX FUND-DIRECT-GROWTH')).toBe('Motilal Oswal Nifty 50 Index Fund');
+    expect(cleanMfName('INVESCO AM (I) PVT LTD#INVESCO MF-INVESCO INDIA FOCUSED FUND-DIRECT-GROWTH')).toBe('Invesco India Focused Fund');
+  });
+  it('falls back to the full name on an odd/empty result', () => {
+    expect(cleanMfName('Some Plain Fund Name')).toBe('Some Plain Fund Name');
+  });
+});
 
 describe('assetValue', () => {
   it('is quantity * price when both present', () => {

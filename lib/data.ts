@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { roundMoney } from '@/lib/finance';
+import { displayNameForType } from '@/lib/wealth';
 import type { Item, Profile, WealthAsset } from '@/lib/types';
 
 export async function getProfile(): Promise<Profile> {
@@ -32,6 +33,8 @@ export async function getWealthAssets(): Promise<WealthAsset[]> {
     importKey: r.importKey,
     casStatus: r.casStatus as WealthAsset['casStatus'],
     costBasis: r.costBasis,
+    // Stored at import; derived from the full name for legacy rows (backfill-on-read, never null).
+    displayName: r.displayName ?? displayNameForType(r.name, r.type),
     purchaseDate: r.purchaseDate ? r.purchaseDate.toISOString() : null,
   }));
 }

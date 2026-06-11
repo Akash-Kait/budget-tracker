@@ -36,20 +36,22 @@ export default async function WealthPage() {
     pct: a.pct,
     color: wealthTypeColor(a.type),
   }));
-  // Treemap of ALL holdings: area ∝ current value, grouped + coloured by asset type (no cost basis
-  // needed). Nesting clusters same-type holdings so the type split reads at a glance. Zero-value
-  // holdings can't be sized, so they're omitted here (they still show in the holdings list).
-  const treemapData = groups
+  // One treemap PER asset type: cells sized to proportions WITHIN their own type, each filling its own
+  // panel (so the 12 stocks aren't crushed against the 91%-of-value MFs). Cross-type magnitude is NOT
+  // implied — the allocation donut remains the honest between-types split; each treemap panel is
+  // labelled with its own type TOTAL so it reads as within-type proportion. Zero-value holdings can't
+  // be sized, so they're omitted here (they still show in the holdings list).
+  const typeTreemaps = groups
     .map((g) => ({
-      name: g.label,
-      children: g.assets
-        .map((a) => ({ name: a.name, value: assetValue(a), fill: wealthTypeColor(g.type) }))
+      type: g.type,
+      label: g.label,
+      total: g.subtotal,
+      color: wealthTypeColor(g.type),
+      items: g.assets
+        .map((a) => ({ label: a.displayName, value: assetValue(a), fill: wealthTypeColor(g.type) }))
         .filter((c) => c.value > 0),
     }))
-    .filter((g) => g.children.length > 0);
-  const treemapLegend = groups
-    .filter((g) => g.subtotal > 0)
-    .map((g) => ({ label: g.label, color: wealthTypeColor(g.type), value: g.subtotal }));
+    .filter((t) => t.items.length > 0);
 
   return (
     <div className="space-y-8">
@@ -90,14 +92,28 @@ export default async function WealthPage() {
           {/* Supporting trio — calm */}
           <WealthKpiCards assets={assets} />
 
-          {/* Charts — calm surfaces, animate in */}
+          {/* Allocation donut — the honest CROSS-type split (between-types). */}
+          <Panel title="Allocation by type">
+            <AllocationChart data={allocation} total={total} />
+          </Panel>
+
+          {/* Within-type treemaps — one per type, each sized to its own proportions and labelled with
+              its type total (NOT comparable across panels; the donut covers cross-type magnitude). */}
           <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="Allocation by type">
-              <AllocationChart data={allocation} total={total} />
-            </Panel>
-            <Panel title="Holdings by value">
-              <TreemapChart data={treemapData} legend={treemapLegend} />
-            </Panel>
+            {typeTreemaps.map((t) => (
+              <Panel
+                key={t.type}
+                title={t.label}
+                right={
+                  <span className="flex items-center gap-2 font-mono text-sm tabular-nums text-text">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
+                    ₹{t.total.toLocaleString('en-IN')}
+                  </span>
+                }
+              >
+                <TreemapChart items={t.items} />
+              </Panel>
+            ))}
           </div>
 
           {/* Holdings — calm grouped table */}

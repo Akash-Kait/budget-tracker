@@ -58,6 +58,7 @@ export interface WealthAsset {
   importKey: string | null; // stable CAS reconciliation key
   casStatus: CasStatus | null; // CURRENT | ABSENT (CAS-sourced only)
   costBasis: number | null; // total amount invested; null = unknown
+  displayName: string; // clean chart name (full `name` truncated at "#"/" - "); DTO always populates it
   purchaseDate: string | null; // ISO
 }
 
