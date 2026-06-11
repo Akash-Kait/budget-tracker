@@ -1,6 +1,5 @@
 import { Panel } from '@/components/wealth/Panel';
-import { EcasImportPanel } from '@/components/wealth/EcasImportPanel';
-import { EcasMfImportPanel } from '@/components/wealth/EcasMfImportPanel';
+import { EcasUnifiedImportPanel } from '@/components/wealth/EcasUnifiedImportPanel';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
 import { WealthKpiCards } from '@/components/wealth/WealthKpiCards';
@@ -76,8 +75,8 @@ export default async function WealthPage() {
           </div>
           <div className="mt-2 space-y-5 border-t border-hairline pt-5">
             <div>
-              <p className="mb-2 text-[11px] uppercase tracking-wide text-faint">Import mutual funds from eCAS</p>
-              <EcasMfImportPanel />
+              <p className="mb-2 text-[11px] uppercase tracking-wide text-faint">Import from eCAS</p>
+              <EcasUnifiedImportPanel />
             </div>
             <div className="border-t border-hairline pt-5">
               <WealthAssetForm />
@@ -139,14 +138,9 @@ export default async function WealthPage() {
             ))}
           </section>
 
-          {/* Import mutual funds from the eCAS folio section — the MF source (preview → confirm) */}
-          <Panel title="Import mutual funds from eCAS">
-            <EcasMfImportPanel />
-          </Panel>
-
-          {/* Import from eCAS — auto-populate/update stocks (depository statement) */}
-          <Panel title="Import stocks from eCAS">
-            <EcasImportPanel />
+          {/* Import from eCAS — one upload → stocks + mutual funds in one atomic confirm */}
+          <Panel title="Import from eCAS">
+            <EcasUnifiedImportPanel />
           </Panel>
 
           {/* Add — calm */}

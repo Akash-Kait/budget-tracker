@@ -369,6 +369,136 @@ def extract_mf_rows(source, password=""):
     return folio_rows, demat_rows, statement_date, grand, demat_total
 
 
+def is_transaction_table(table):
+    """The MF/equity TRANSACTION statement table (Op.Bal/Cr/Debit/Cl.Bal/Stamp). Its ISIN rows are
+    transactions, NOT holdings — excluded from import but COUNTED as skipped (never silently dropped).
+    De-doubles the garbled header so the markers are detected positively."""
+    for row in table:
+        jj = re.sub(r"(.)\1", r"\1", " ".join((c or "") for c in row).lower())
+        if "stamp" in jj or "transaction" in jj or "op. bal" in jj or "cl. bal" in jj:
+            return True
+    return False
+
+
+def collect_unified(tables, bo_id="", counts=None):
+    """PURE (exported for tests): partition ONE page's tables for the unified import. EVERY ISIN-bearing
+    holding-shaped row lands in exactly one class so none is silently excluded (the generalized
+    'owned by nobody' guard):
+      • folio table  → folio MF      • holding table → equity (INE) | demat MF (INF) | unrecognized
+      • transaction table → skipped  • any other ISIN-bearing row → unrecognized (surfaced)
+    Returns (raw_holding_rows, folio_rows, demat_rows, grand); `counts` (a dict) is accumulated in place
+    with the per-class raw tallies used by the balance guard."""
+    if counts is None:
+        counts = {"parsedRows": 0, "equity": 0, "folioMf": 0, "dematMf": 0, "unrecognized": 0, "skipped": 0}
+    raw_holding_rows = []
+    folio_rows = []
+    demat_rows = []
+    grand = None
+
+    def seen(cls):
+        counts["parsedRows"] += 1
+        counts[cls] += 1
+
+    for table in tables:
+        if is_folio_table(table):
+            for row in table:
+                p = parse_mf_row(row)
+                if p is None:
+                    continue
+                if isinstance(p, tuple):  # grand total — an anchor, not a holding
+                    grand = (p[1], p[2])
+                    continue
+                seen("folioMf")
+                folio_rows.append(p)
+        elif is_transaction_table(table):
+            # Checked BEFORE the holding detector: transaction rows must never out-rank holdings, even
+            # if a transaction header also happened to carry Current/Value columns.
+            for row in table:
+                if parse_holding_row(row) is not None:
+                    seen("skipped")  # a transaction row, explicitly skipped (not a holding)
+        elif is_demat_holding_table(table):
+            for row in table:
+                h = parse_holding_row(row)
+                if h is None:
+                    continue
+                h["boId"] = bo_id
+                raw_holding_rows.append(h)  # build_parsed re-partitions: keeps INE, skips INF, surfaces unrec
+                kind = classify_isin(_clean_isin(h["isin"]))
+                if kind == "equity":
+                    seen("equity")
+                elif kind == "mf":
+                    seen("dematMf")
+                    demat_rows.append({
+                        "isin": _clean_isin(h["isin"]),
+                        "name": h["name"],
+                        "boId": bo_id,
+                        "units": _num(h["units"]),
+                        "nav": _num(h["price"]),
+                        "amountInvested": None,
+                        "valuation": _num(h["value"]),
+                    })
+                else:
+                    seen("unrecognized")
+        else:
+            for row in table:  # unexpected table: an ISIN-bearing row must be surfaced, not lost
+                h = parse_holding_row(row)
+                if h is None:
+                    continue
+                seen("unrecognized")
+                h["boId"] = bo_id
+                raw_holding_rows.append(h)
+    return raw_holding_rows, folio_rows, demat_rows, grand
+
+
+def extract_unified(source, password=""):
+    """ONE pdfplumber pass producing all three row sets for the unified import (via collect_unified).
+    Returns (raw_holding_rows, folio_rows, demat_rows, grand, equity_stmt, mf_stmt, equity_total,
+    demat_total, row_accounting). Equity and MF carry their OWN 'AS ON' dates (a consolidated eCAS uses
+    one date, but each class is dated from its own anchor so a divergence can't mis-stamp a class)."""
+    import pdfplumber  # lazy — keeps the pure helpers importable without pdfplumber installed
+
+    raw_holding_rows = []
+    folio_rows = []
+    demat_rows = []
+    grand = None
+    equity_stmt = mf_stmt = equity_total = demat_total = None
+    counts = {"parsedRows": 0, "equity": 0, "folioMf": 0, "dematMf": 0, "unrecognized": 0, "skipped": 0}
+    with pdfplumber.open(source, password=password or "") as pdf:
+        bo = ""
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            m = BO_ID.search(text)
+            if m:
+                bo = m.group(1)
+            if equity_stmt is None:
+                equity_stmt = find_statement_date(text)  # equity holding-statement "AS ON"
+            if mf_stmt is None:
+                mf_stmt = find_mf_statement_date(text)  # MF folio "AS ON" (own anchor; falls back internally)
+            if equity_total is None:
+                equity_total = find_equity_total(text)
+            if demat_total is None:
+                demat_total = find_demat_mf_total(text)
+            rhr, fr, dr, g = collect_unified(page.extract_tables() or [], bo, counts)
+            raw_holding_rows.extend(rhr)
+            folio_rows.extend(fr)
+            demat_rows.extend(dr)
+            if g is not None:
+                grand = g
+    # Each class falls back to the other's date only if its own anchor was absent (never invent one).
+    return raw_holding_rows, folio_rows, demat_rows, grand, equity_stmt or mf_stmt, mf_stmt or equity_stmt, equity_total, demat_total, counts
+
+
+def build_unified(raw_holding_rows, folio_rows, demat_rows, grand, equity_stmt, mf_stmt, equity_total, demat_total, row_accounting):
+    """PURE: assemble the unified parse output — the existing EcasParsed (equity) + MfParsed (folio +
+    demat) shapes the two engines already consume, plus the row-accounting tally. Each class is stamped
+    with its OWN statement date. Exported for tests."""
+    return {
+        "equity": build_parsed(raw_holding_rows, equity_stmt, equity_total),
+        "mf": build_mf_parsed(folio_rows, demat_rows, mf_stmt, grand, demat_total),
+        "rowAccounting": row_accounting,
+    }
+
+
 def parse_holding_row(cells):
     """PURE: one extracted table row → {isin,name,units,price,value} (strings) or None.
 
@@ -498,7 +628,9 @@ def main() -> None:
         fail(4, "pdfplumber_missing")
 
     try:
-        if mode == "mf":
+        if mode == "unified":
+            unified = extract_unified(io.BytesIO(pdf_bytes), password)
+        elif mode == "mf":
             folio_rows, demat_rows, stmt, grand, demat_total = extract_mf_rows(io.BytesIO(pdf_bytes), password)
         else:
             rows, stmt, equity_total = extract_rows(io.BytesIO(pdf_bytes), password)
@@ -509,7 +641,10 @@ def main() -> None:
         sys.stderr.write(f"parse failed: {name}\n")
         fail(3, "parse_error", detail=name)
 
-    if mode == "mf":
+    if mode == "unified":
+        raw_holding_rows, folio_rows, demat_rows, grand, equity_stmt, mf_stmt, equity_total, demat_total, row_accounting = unified
+        print(json.dumps(build_unified(raw_holding_rows, folio_rows, demat_rows, grand, equity_stmt, mf_stmt, equity_total, demat_total, row_accounting)))
+    elif mode == "mf":
         print(json.dumps(build_mf_parsed(folio_rows, demat_rows, stmt, grand, demat_total)))
     else:
         print(json.dumps(build_parsed(rows, stmt, equity_total)))

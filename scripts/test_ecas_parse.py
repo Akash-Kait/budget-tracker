@@ -13,6 +13,7 @@ from ecas_parse import (  # noqa: E402
     find_statement_date, find_equity_total, parse_holding_row,
     _clean_isin, parse_mf_row, build_mf_parsed, find_mf_statement_date,
     is_folio_table, is_demat_holding_table, collect_mf_rows, find_demat_mf_total,
+    is_transaction_table, collect_unified, build_unified,
 )
 
 
@@ -355,6 +356,51 @@ def test_build_mf_parsed_two_sections_tie_to_both_buckets():
     assert round(sum(h["valuation"] for h in dem), 2) == out["dematStatedTotal"] == 180540.01
     assert all(h["amountInvested"] is None for h in dem)  # demat: value-only, no cost basis
     assert any(h["isin"] == "INF769K01DM9" for h in fol)  # soft-hyphen folio ISIN repaired
+
+
+# --- Unified mode: one pass partitions equity + folio-MF + demat-MF + skipped(txn) + unrecognized ----
+
+def test_is_transaction_table_detects_only_the_transaction_table():
+    assert is_transaction_table(_TXN_TABLE) is True       # Op.Bal/Cl.Bal/Stamp markers
+    assert is_transaction_table(_DEMAT_TABLE) is False
+    assert is_transaction_table(_FOLIO_TABLE) is False
+
+
+def test_collect_unified_partitions_every_row_and_balances():
+    counts = {"parsedRows": 0, "equity": 0, "folioMf": 0, "dematMf": 0, "unrecognized": 0, "skipped": 0}
+    rhr, folio, demat, grand = collect_unified([_TXN_TABLE, _DEMAT_TABLE, _FOLIO_TABLE], "BO1", counts)
+    # 1 equity (ITC) + 4 demat MF + 5 folio MF + 4 transaction(skipped) + 0 unrecognized = 14 parsed
+    assert counts == {"parsedRows": 14, "equity": 1, "folioMf": 5, "dematMf": 4, "unrecognized": 0, "skipped": 4}
+    # the balance the orchestrator asserts holds for a clean statement
+    assert counts["parsedRows"] == counts["equity"] + counts["folioMf"] + counts["dematMf"] + counts["unrecognized"] + counts["skipped"]
+    assert {d["isin"] for d in demat} == {"INF205KA1213", "INF247L01AE7", "INF200K01RP8", "INF789FC12T1"}
+    assert len(folio) == 5 and grand == (850000.0, 1026056.02)
+
+
+def test_build_unified_yields_both_engine_shapes_plus_accounting():
+    counts = {"parsedRows": 0, "equity": 0, "folioMf": 0, "dematMf": 0, "unrecognized": 0, "skipped": 0}
+    rhr, folio, demat, grand = collect_unified([_TXN_TABLE, _DEMAT_TABLE, _FOLIO_TABLE], "BO1", counts)
+    out = build_unified(rhr, folio, demat, grand, "30-04-2026", "30-04-2026", 944.85, 180540.01, counts)
+    assert [h["isin"] for a in out["equity"]["accounts"] for h in a["holdings"]] == ["INE154A01025"]  # only ITC equity
+    assert len(out["mf"]["holdings"]) == 9  # 5 folio + 4 demat
+    assert out["rowAccounting"]["parsedRows"] == 14
+
+
+def test_build_unified_stamps_each_class_with_its_own_statement_date():
+    # Equity and MF carry their OWN "AS ON" dates — a divergence can't mis-stamp a class.
+    out = build_unified([], [], [], None, "30-04-2026", "31-03-2026", None, None,
+                        {"parsedRows": 0, "equity": 0, "folioMf": 0, "dematMf": 0, "unrecognized": 0, "skipped": 0})
+    assert out["equity"]["statementDate"] == "2026-04-30T00:00:00.000Z"
+    assert out["mf"]["statementDate"] == "2026-03-31T00:00:00.000Z"
+
+
+def test_collect_unified_surfaces_an_unexpected_isin_row_not_silently_dropped():
+    # An ISIN-bearing holding row in an UNEXPECTED table (neither folio/holding/transaction) must be
+    # counted as unrecognized (surfaced), never lost — the generalized 'owned by nobody' guard.
+    odd = [["Header One", "Header Two"], ["INE999Z01010", "MYSTERY HOLDING", "1", "10", "10"]]
+    counts = {"parsedRows": 0, "equity": 0, "folioMf": 0, "dematMf": 0, "unrecognized": 0, "skipped": 0}
+    collect_unified([odd], "BO1", counts)
+    assert counts["unrecognized"] == 1 and counts["parsedRows"] == 1
 
 
 if __name__ == "__main__":

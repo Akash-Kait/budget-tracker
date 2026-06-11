@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { withErrorHandling } from '@/lib/handler';
 import { runEcasParser, EcasError, type EcasErrorCode } from '@/lib/ecas/sidecar';
 import { reconcile } from '@/lib/ecas/reconcile';
+import { equityCoverage } from '@/lib/ecas/coverage';
 import { displayNameForType } from '@/lib/wealth';
 import type { ExistingStockAsset } from '@/lib/ecas/types';
 
@@ -97,21 +98,9 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
     }
   });
 
-  // Completeness check: the value we actually imported (qty×price across every equity row this run)
-  // vs the statement's stated Equity total. A shortfall means a holding silently didn't parse — make
-  // it VISIBLE rather than let the total quietly under-report. [live-run issue 2]
-  const num = (v: unknown) => (typeof v === 'number' ? v : 0);
-  const imported =
-    plan.creates.reduce((s, c) => s + num(c.quantity) * num(c.pricePerUnit), 0) +
-    plan.updates.reduce((s, u) => s + num(u.data.quantity) * num(u.data.pricePerUnit), 0);
-  const importedEquityValue = Math.round(imported * 100) / 100;
-  const stated = parsed.equityStatedTotal ?? null;
-  const coverage = {
-    statedEquityTotal: stated,
-    importedEquityValue,
-    // null = couldn't read a statement total to verify against; true/false = matches within tolerance.
-    complete: stated == null ? null : Math.abs(importedEquityValue - stated) <= Math.max(1, stated * 0.005),
-  };
+  // Completeness check (shared pure helper): imported equity value vs the statement's stated Equity
+  // total — a shortfall means a holding silently didn't parse. [live-run issue 2]
+  const coverage = equityCoverage(plan, parsed.equityStatedTotal ?? null);
 
   return NextResponse.json({
     created: plan.creates.length,

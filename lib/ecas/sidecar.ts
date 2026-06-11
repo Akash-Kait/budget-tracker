@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ecasParsedSchema, type EcasParsed } from './types';
 import { mfParsedSchema, type MfParsed } from './mf-types';
+import { unifiedParsedSchema, type UnifiedParsed } from './unified-types';
 
 // I/O boundary for the Python eCAS parser (pdfplumber). Separate from lib/cas/sidecar.ts. Sends the
 // PDF over STDIN (password first line — never argv/env), in-memory; never logs the PDF/password/PII.
@@ -112,5 +113,14 @@ export async function runEcasMfParser(pdf: Buffer, password: string): Promise<Mf
   const json = await spawnParser(['mf'], pdf, password);
   const parsed = mfParsedSchema.safeParse(json);
   if (!parsed.success) throw new EcasError('BAD_OUTPUT', 'Unexpected eCAS MF parser output');
+  return parsed.data;
+}
+
+// Unified (mode "unified") — ONE parse → equity + MF (folio + demat) + row-accounting, for the
+// single upload → one preview → one atomic confirm flow.
+export async function runEcasUnifiedParser(pdf: Buffer, password: string): Promise<UnifiedParsed> {
+  const json = await spawnParser(['unified'], pdf, password);
+  const parsed = unifiedParsedSchema.safeParse(json);
+  if (!parsed.success) throw new EcasError('BAD_OUTPUT', 'Unexpected eCAS unified parser output');
   return parsed.data;
 }
