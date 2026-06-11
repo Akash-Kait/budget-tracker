@@ -4,6 +4,7 @@
 // design — anything in Planning (lib/finance.ts must never import this).
 
 import { amfiProvider } from './amfi';
+import { nseProvider } from './nse';
 
 export interface Quote {
   price: number;
@@ -38,5 +39,16 @@ export const manualProvider: PriceProvider = {
  */
 export function getPriceProvider(): PriceProvider {
   if (process.env.MARKET_DATA_PROVIDER === 'amfi') return amfiProvider;
+  return manualProvider;
+}
+
+/**
+ * Resolves the active EQUITY (stock) price provider from `EQUITY_DATA_PROVIDER` — independent of the
+ * MF provider above so the two sources fail independently:
+ *   - `nse`             → NSE end-of-day closes via the nselib sidecar
+ *   - absent / anything → `manualProvider` (default; stocks keep their eCAS statement-date price)
+ */
+export function getEquityPriceProvider(): PriceProvider {
+  if (process.env.EQUITY_DATA_PROVIDER === 'nse') return nseProvider;
   return manualProvider;
 }

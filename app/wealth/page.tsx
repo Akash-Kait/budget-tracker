@@ -21,9 +21,10 @@ export const dynamic = 'force-dynamic';
 export default async function WealthPage() {
   const assets = await getWealthAssets();
   const now = new Date().toISOString();
-  // A live (API) NAV that hasn't refreshed in N business days is stale — flagged in the row.
+  // A refreshed live price (API = AMFI NAV, NSE = equity close) that hasn't advanced in N business
+  // days is stale — flagged in the row. (eCAS/CAS statement-seed prices aren't "live", so not flagged.)
   const isAssetStale = (a: (typeof assets)[number]) =>
-    a.priceSource === 'API' && a.priceUpdatedAt != null && isStale(a.priceUpdatedAt, now);
+    (a.priceSource === 'API' || a.priceSource === 'NSE') && a.priceUpdatedAt != null && isStale(a.priceUpdatedAt, now);
   const total = totalWealth(assets);
   const groups = groupByType(assets);
   const empty = assets.length === 0;

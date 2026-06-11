@@ -43,11 +43,17 @@ export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; s
             </span>
           )}
           {asset.priceStatus === 'NOT_FOUND' && (
+            // Source-aware copy: a stock's ISIN isn't in the NSE symbol map (not user-fixable — the map
+            // is maintained in code), vs a MF's AMFI scheme code that the user can correct by editing.
             <span
-              title="This scheme code wasn't found in the NAV feed on the last refresh. Edit the asset to fix it."
+              title={
+                asset.type === 'STOCK'
+                  ? "This stock's ISIN isn't mapped to an NSE symbol, so its price wasn't refreshed. The last known price is kept."
+                  : "This scheme code wasn't found in the NAV feed on the last refresh. Edit the asset to fix it."
+              }
               className="rounded border border-warning/40 bg-warning-weak px-1.5 py-0.5 text-[10px] font-medium text-warning"
             >
-              scheme code didn’t resolve
+              {asset.type === 'STOCK' ? 'price not refreshed' : 'scheme code didn’t resolve'}
             </span>
           )}
           {asset.casStatus === 'ABSENT' && (
@@ -78,17 +84,20 @@ export function WealthAssetRow({ asset, stale = false }: { asset: WealthAsset; s
       {/* Price as-of — AMFI NAV is end-of-day, never live; wraps within its own column */}
       <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-tight text-faint">
         {asset.priceUpdatedAt &&
+          // Label derives from priceSource (NOT type), so a stock's provenance is honest: 'ECAS' =
+          // statement-date import price (pre-refresh), 'NSE' = refreshed end-of-day close.
           (asset.priceSource === 'API'
             ? `NAV as of ${formatDay(asset.priceUpdatedAt)} · end of day`
-            : asset.priceSource === 'CAS'
-              ? `From CAS · ${formatDay(asset.priceUpdatedAt)}`
-              : asset.priceSource === 'ECAS'
-                ? // statement-date price only — no live stock provider yet (spec Q6); honestly not live
-                  `as of ${formatDay(asset.priceUpdatedAt)} · end of day`
-                : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
+            : asset.priceSource === 'NSE'
+              ? `as of ${formatDay(asset.priceUpdatedAt)} · NSE close`
+              : asset.priceSource === 'CAS'
+                ? `From CAS · ${formatDay(asset.priceUpdatedAt)}`
+                : asset.priceSource === 'ECAS'
+                  ? `as of ${formatDay(asset.priceUpdatedAt)} · eCAS`
+                  : `Manual · ${formatDay(asset.priceUpdatedAt)}`)}
         {stale && (
           <span
-            title="This NAV is older than expected — the feed may not have updated for this scheme."
+            title="This price is older than expected — the feed may not have updated recently."
             className="rounded bg-warning-weak px-1.5 py-0.5 text-[10px] font-medium text-warning"
           >
             stale

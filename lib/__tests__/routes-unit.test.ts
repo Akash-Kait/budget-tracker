@@ -27,7 +27,7 @@ vi.mock('@/lib/data', () => ({
   getFundings: vi.fn(),
 }));
 // Mock the provider seam so refresh tests drive the state machine without any network/feed.
-vi.mock('@/lib/market/provider', () => ({ getPriceProvider: vi.fn() }));
+vi.mock('@/lib/market/provider', () => ({ getPriceProvider: vi.fn(), getEquityPriceProvider: vi.fn() }));
 
 import { prisma } from '@/lib/db';
 import { getProfile, getItems } from '@/lib/data';
@@ -39,7 +39,7 @@ import { POST as fundingPOST } from '@/app/api/items/[id]/funding/route';
 import { GET as wealthGET, POST as wealthPOST } from '@/app/api/wealth/route';
 import { PUT as wealthPUT, DELETE as wealthDELETE } from '@/app/api/wealth/[id]/route';
 import { POST as refreshPOST } from '@/app/api/wealth/refresh-prices/route';
-import { getPriceProvider } from '@/lib/market/provider';
+import { getPriceProvider, getEquityPriceProvider } from '@/lib/market/provider';
 
 const m = prisma as unknown as Record<string, Record<string, Mock>> & { $transaction: Mock };
 const knownErr = (code: string) =>
@@ -272,113 +272,128 @@ describe('wealth [id] route', () => {
   });
 });
 
-describe('wealth refresh-prices route (state machine)', () => {
-  const provider = getPriceProvider as Mock;
+describe('wealth refresh-prices route (fan-out: MF→AMFI, STOCK→NSE, independent)', () => {
+  const mfProvider = getPriceProvider as Mock;
+  const eqProvider = getEquityPriceProvider as Mock;
 
-  // The route wraps all per-asset writes in prisma.$transaction(cb); run the callback with the
-  // mocked prisma so tx.wealthAsset.update routes to the same mock.
+  // findMany is called once per domain (where.type); route each to the right fixture.
+  const rows = (mf: unknown[], stock: unknown[]) =>
+    m.wealthAsset.findMany.mockImplementation((args: { where?: { type?: string } }) =>
+      Promise.resolve(args?.where?.type === 'STOCK' ? stock : mf),
+    );
+  const quotes = (entries: [string, unknown][]) => ({
+    name: 'p', getQuote: vi.fn(), getQuotes: vi.fn().mockResolvedValue(new Map(entries)),
+  });
+
   beforeEach(() => {
     m.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => unknown) => cb(prisma));
-  });
-
-  it('feed unreachable (getQuotes throws) → 500 and NO price write (fail safe)', async () => {
-    m.wealthAsset.findMany.mockResolvedValue([
-      { id: '1', name: 'Fund A', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
-    ]);
-    provider.mockReturnValue({
-      name: 'amfi',
-      getQuote: vi.fn(),
-      getQuotes: vi.fn().mockRejectedValue(new Error('SECRET feed down')),
-    });
-    await expect500NoLeak(await refreshPOST());
-    expect(m.wealthAsset.update).not.toHaveBeenCalled();
-  });
-
-  it('mixed: found → priced; not-found → untouched price + persisted NOT_FOUND; stale flagged', async () => {
-    const old = '2025-05-14T00:00:00.000Z'; // far in the past → stale
-    m.wealthAsset.findMany.mockResolvedValue([
-      { id: '1', name: 'Found Fresh', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
-      { id: '2', name: 'Missing', type: 'MUTUAL_FUND', ticker: '999999', priceStatus: null },
-      { id: '3', name: 'Found Stale', type: 'MUTUAL_FUND', ticker: '100002', priceStatus: null },
-    ]);
-    provider.mockReturnValue({
-      name: 'amfi',
-      getQuote: vi.fn(),
-      getQuotes: vi.fn().mockResolvedValue(
-        new Map<string, { price: number; asOf: string; name?: string } | null>([
-          ['100001', { price: 123.45, asOf: new Date().toISOString(), name: 'HDFC Flexi Cap' }],
-          ['999999', null],
-          ['100002', { price: 50, asOf: old }],
-        ]),
-      ),
-    });
     m.wealthAsset.update.mockResolvedValue({});
+    mfProvider.mockReturnValue({ name: 'manual', getQuote: vi.fn() }); // default manual; tests override
+    eqProvider.mockReturnValue({ name: 'manual', getQuote: vi.fn() });
+  });
+
+  it('MF feed down does NOT block STOCK refresh — independent, soft, NOT a 500', async () => {
+    rows(
+      [{ id: 'mf', name: 'Fund', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null }],
+      [{ id: 'st', name: 'SBI', type: 'STOCK', ticker: 'INE062A01020', priceStatus: null }],
+    );
+    mfProvider.mockReturnValue({ name: 'amfi', getQuote: vi.fn(), getQuotes: vi.fn().mockRejectedValue(new Error('SECRET feed down')) });
+    eqProvider.mockReturnValue(quotes([['INE062A01020', { price: 800, asOf: new Date().toISOString(), name: 'SBIN' }]]));
 
     const res = await refreshPOST();
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(200); // soft — not a 500
     const body = await res.json();
+    expect(body.failed).toEqual(['mutual funds']); // MF domain surfaced as failed
+    expect(body.updated).toBe(1); // the stock still refreshed
+    // MF row UNTOUCHED (no write — price kept, never zeroed); stock written with priceSource NSE.
+    expect(m.wealthAsset.update).toHaveBeenCalledTimes(1);
+    expect(m.wealthAsset.update).toHaveBeenCalledWith({
+      where: { id: 'st' },
+      data: expect.objectContaining({ pricePerUnit: 800, priceSource: 'NSE', priceStatus: 'OK' }),
+    });
+  });
+
+  it('STOCK: ClosePrice written with priceSource NSE; unmapped/unresolved → NOT_FOUND (price kept)', async () => {
+    rows([], [
+      { id: 's1', name: 'SBI', type: 'STOCK', ticker: 'INE062A01020', priceStatus: null },
+      { id: 's2', name: 'Unmapped', type: 'STOCK', ticker: 'INE999Z01010', priceStatus: null },
+    ]);
+    eqProvider.mockReturnValue(quotes([
+      ['INE062A01020', { price: 812.5, asOf: new Date().toISOString(), name: 'SBIN' }],
+      ['INE999Z01010', null], // not in the ISIN→symbol map → null → NOT_FOUND
+    ]));
+    const body = await (await refreshPOST()).json();
+    expect(body.updated).toBe(1);
+    expect(body.notFound).toEqual(['Unmapped']);
+    expect(m.wealthAsset.update).toHaveBeenCalledWith({ where: { id: 's2' }, data: { priceStatus: 'NOT_FOUND' } });
+  });
+
+  it('NSE refresh PRESERVES an existing (eCAS) name — never overwrites it with the bare symbol', async () => {
+    rows([], [
+      { id: 'named', name: 'SBI', type: 'STOCK', ticker: 'INE062A01020', priceStatus: null, tickerName: 'State Bank of India' },
+      { id: 'unnamed', name: 'ITC', type: 'STOCK', ticker: 'INE154A01025', priceStatus: null, tickerName: null },
+    ]);
+    eqProvider.mockReturnValue(quotes([
+      ['INE062A01020', { price: 800, asOf: new Date().toISOString(), name: 'SBIN' }],
+      ['INE154A01025', { price: 282, asOf: new Date().toISOString(), name: 'ITC' }],
+    ]));
+    await refreshPOST();
+    const named = m.wealthAsset.update.mock.calls.find((c) => c[0].where.id === 'named')![0];
+    const unnamed = m.wealthAsset.update.mock.calls.find((c) => c[0].where.id === 'unnamed')![0];
+    // clean eCAS name survives — the symbol does NOT replace it
+    expect(named.data).not.toHaveProperty('tickerName');
+    expect(named.data).toMatchObject({ pricePerUnit: 800, priceSource: 'NSE' });
+    // no prior name → fall back to the resolved symbol so the mapping is still confirmable
+    expect(unnamed.data).toMatchObject({ tickerName: 'ITC', priceSource: 'NSE' });
+  });
+
+  it('MF: found priced (priceSource API), missing → NOT_FOUND, old → stale', async () => {
+    const old = '2025-05-14T00:00:00.000Z';
+    rows([
+      { id: '1', name: 'Fresh', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
+      { id: '2', name: 'Missing', type: 'MUTUAL_FUND', ticker: '999999', priceStatus: null },
+      { id: '3', name: 'Stale', type: 'MUTUAL_FUND', ticker: '100002', priceStatus: null },
+    ], []);
+    mfProvider.mockReturnValue(quotes([
+      ['100001', { price: 123.45, asOf: new Date().toISOString(), name: 'HDFC' }],
+      ['999999', null],
+      ['100002', { price: 50, asOf: old }],
+    ]));
+    const body = await (await refreshPOST()).json();
     expect(body.updated).toBe(2);
     expect(body.notFound).toEqual(['Missing']);
-    expect(body.stale).toEqual(['Found Stale']);
-
-    // Found asset: full price write incl. priceSource API + priceStatus OK + resolved tickerName;
-    // never zeroed.
-    expect(m.wealthAsset.update).toHaveBeenCalledWith({
-      where: { id: '1' },
-      data: expect.objectContaining({
-        pricePerUnit: 123.45,
-        priceSource: 'API',
-        priceStatus: 'OK',
-        tickerName: 'HDFC Flexi Cap',
-      }),
-    });
-    // Not-found asset: ONLY priceStatus is written — price left untouched.
-    expect(m.wealthAsset.update).toHaveBeenCalledWith({
-      where: { id: '2' },
-      data: { priceStatus: 'NOT_FOUND' },
-    });
+    expect(body.stale).toEqual(['Stale']);
+    expect(m.wealthAsset.update).toHaveBeenCalledWith({ where: { id: '1' }, data: expect.objectContaining({ priceSource: 'API', priceStatus: 'OK' }) });
   });
 
-  it('manual provider (no getQuotes) → true no-op: nothing checked, marked, or written', async () => {
-    provider.mockReturnValue({ name: 'manual', getQuote: vi.fn().mockResolvedValue(null) });
-    const res = await refreshPOST();
-    const body = await res.json();
-    expect(body).toEqual({ provider: 'manual', checked: 0, updated: 0, stale: [], notFound: [] });
-    expect(m.wealthAsset.findMany).not.toHaveBeenCalled();
+  it('both manual → true no-op: nothing written; checked 0, manual surfaced (not buried)', async () => {
+    rows([{ id: 'mf', type: 'MUTUAL_FUND', ticker: '100001', name: 'F', priceStatus: null }], []);
+    const body = await (await refreshPOST()).json();
+    expect(body).toMatchObject({ mfProvider: 'manual', equityProvider: 'manual', updated: 0, checked: 0, failed: [] });
     expect(m.wealthAsset.update).not.toHaveBeenCalled();
   });
 
-  it('no mutual funds with a ticker → checked 0, no provider fetch', async () => {
-    m.wealthAsset.findMany.mockResolvedValue([]);
-    const getQuotes = vi.fn();
-    provider.mockReturnValue({ name: 'amfi', getQuote: vi.fn(), getQuotes });
-    const res = await refreshPOST();
-    expect((await res.json()).checked).toBe(0);
-    expect(getQuotes).not.toHaveBeenCalled();
+  it('MF live + stocks manual → checked counts only the live domain; stocks reported as manual', async () => {
+    // The real-world case behind a misleading "Updated 9/21": stocks were never attempted (equity
+    // provider off), so they must NOT inflate the denominator — they surface in `manual` instead.
+    rows(
+      [{ id: 'mf', name: 'Fund', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null }],
+      [{ id: 'st', name: 'SBI', type: 'STOCK', ticker: 'INE062A01020', priceStatus: null }],
+    );
+    mfProvider.mockReturnValue(quotes([['100001', { price: 123.45, asOf: new Date().toISOString(), name: 'HDFC' }]]));
+    // equity provider stays the default manual (no getQuotes)
+    const body = await (await refreshPOST()).json();
+    expect(body).toMatchObject({ updated: 1, checked: 1, manual: ['stocks'], failed: [] });
+    // the stock row is left untouched (manual = not attempted, not a failure, not zeroed)
+    expect(m.wealthAsset.update).toHaveBeenCalledTimes(1);
+    expect(m.wealthAsset.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'mf' } }));
   });
 
-  it('mid-loop update failure → 500 inside a transaction (so "nothing changed" is true)', async () => {
-    m.wealthAsset.findMany.mockResolvedValue([
-      { id: '1', name: 'A', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null },
-      { id: '2', name: 'B', type: 'MUTUAL_FUND', ticker: '100002', priceStatus: null },
-    ]);
-    provider.mockReturnValue({
-      name: 'amfi',
-      getQuote: vi.fn(),
-      getQuotes: vi.fn().mockResolvedValue(
-        new Map<string, { price: number; asOf: string } | null>([
-          ['100001', { price: 10, asOf: new Date().toISOString() }],
-          ['100002', { price: 20, asOf: new Date().toISOString() }],
-        ]),
-      ),
-    });
-    // First asset writes fine; the second rejects mid-loop.
-    m.wealthAsset.update
-      .mockResolvedValueOnce({})
-      .mockRejectedValueOnce(new Error('SECRET db locked'));
-
+  it('a DB write failure inside the transaction → 500 (rollback; nothing changed)', async () => {
+    rows([{ id: '1', name: 'A', type: 'MUTUAL_FUND', ticker: '100001', priceStatus: null }], []);
+    mfProvider.mockReturnValue(quotes([['100001', { price: 10, asOf: new Date().toISOString() }]]));
+    m.wealthAsset.update.mockRejectedValueOnce(new Error('SECRET db locked'));
     await expect500NoLeak(await refreshPOST());
-    // The writes were wrapped in $transaction, so on a real DB the first write rolls back too.
     expect(m.$transaction).toHaveBeenCalled();
   });
 });

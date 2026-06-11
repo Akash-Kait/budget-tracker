@@ -27,7 +27,7 @@ model WealthAsset {
   value          Float? // manual fallback when units/price don't apply
   lastPrice      Float? // last fetched/entered unit price (market-data headroom)
   priceUpdatedAt DateTime? // when pricePerUnit was last set
-  priceSource    String? // MANUAL | API
+  priceSource    String? // MANUAL | API (AMFI NAV) | CAS | ECAS | NSE (equity close) — see PRICE_SOURCES
   priceStatus    String? // OK | NOT_FOUND (scheme code didn't resolve on last refresh); null = n/a
   tickerName     String? // provider-resolved name for `ticker` (echoed back so a wrong code shows); null = n/a
   source         String? // CAS | MANUAL (null = legacy/manual); scopes what CAS reconciliation may touch

@@ -13,21 +13,25 @@ export function RefreshPricesButton() {
     const res = await fetch('/api/wealth/refresh-prices', { method: 'POST' });
     setBusy(false);
     if (!res.ok) {
-      // Loud, not silent: a feed failure changed nothing server-side (prices kept at their last NAV),
-      // so say so explicitly rather than leave the last values looking current.
-      setMsg('NAV refresh failed — prices unchanged, may be stale.');
+      // Loud, not silent: a write failure changed nothing server-side (prices kept), so say so.
+      setMsg('Price refresh failed — prices unchanged, may be stale.');
       return;
     }
     const data = await res.json();
-    if (data.provider === 'manual') {
-      setMsg('Manual mode — set MARKET_DATA_PROVIDER=amfi for live mutual-fund NAVs.');
-    } else if (data.checked === 0) {
-      setMsg('No mutual funds with a scheme code to refresh.');
+    if (data.mfProvider === 'manual' && data.equityProvider === 'manual') {
+      setMsg('Manual mode — set MARKET_DATA_PROVIDER=amfi (MF NAVs) / EQUITY_DATA_PROVIDER=nse (stock closes) for live prices.');
+    } else if (data.checked === 0 && !data.manual?.length) {
+      setMsg('No holdings with a ticker to refresh.');
     } else {
-      const parts = [`Updated ${data.updated}/${data.checked}`];
+      const parts: string[] = [];
+      if (data.checked > 0) parts.push(`Updated ${data.updated}/${data.checked}`);
       if (data.stale?.length) parts.push(`${data.stale.length} stale`);
-      if (data.notFound?.length)
-        parts.push(`couldn’t update: ${data.notFound.join(', ')}`);
+      if (data.notFound?.length) parts.push(`couldn’t update: ${data.notFound.join(', ')}`);
+      // A domain whose live provider isn't enabled — its assets weren't attempted (so they're NOT
+      // hidden in the "X/Y" denominator); say so instead of looking like silent failures.
+      if (data.manual?.length) parts.push(`${data.manual.join(' & ')}: live pricing not enabled`);
+      // A whole domain's feed was down — prices kept, surfaced (not silently frozen-as-current).
+      if (data.failed?.length) parts.push(`${data.failed.join(' & ')} feed unavailable — prices kept, may be stale`);
       setMsg(parts.join(' · '));
     }
     router.refresh();

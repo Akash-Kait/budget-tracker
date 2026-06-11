@@ -3,3 +3,8 @@
 #   python3 -m venv --copies scripts/.venv && scripts/.venv/bin/pip install -r scripts/requirements.txt
 # v0.4.3+ exposes the per-scheme AMFI code, which the app writes as `ticker` for AMFI revaluation.
 casparser>=0.7.0,<1.0
+# eCAS PDF parser sidecar (scripts/ecas_parse.py) — pdfplumber (PyPI, MIT).
+pdfplumber>=0.11,<0.12
+# Stock EOD quote sidecar (scripts/nse_quote.py) — nselib (Apache-2.0). Pulls in pandas/scipy/
+# pandas-market-calendars (heavier). Uses the EOD price_volume_data path (period='1M').
+nselib==2.5.1

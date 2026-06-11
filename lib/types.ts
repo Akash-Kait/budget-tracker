@@ -21,9 +21,10 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   OTHER: 'Other',
 };
 
-// MANUAL = user-entered, API = AMFI live NAV, CAS = MF statement seed, ECAS = depository eCAS stock
-// statement seed (statement-date price; no live stock provider yet — labeled "as of <date>").
-export const PRICE_SOURCES = ['MANUAL', 'API', 'CAS', 'ECAS'] as const;
+// MANUAL = user-entered, API = AMFI live NAV (MF), CAS = MF statement seed, ECAS = depository eCAS
+// import seed (statement-date price), NSE = refreshed equity end-of-day close (nselib). The as-of label
+// derives from this (NAV/eCAS/NSE close), so a stock's pre-refresh vs refreshed provenance stays honest.
+export const PRICE_SOURCES = ['MANUAL', 'API', 'CAS', 'ECAS', 'NSE'] as const;
 export type PriceSource = (typeof PRICE_SOURCES)[number];
 
 // Outcome of the last live-price refresh for an asset. NOT_FOUND = the ticker/scheme code didn't
