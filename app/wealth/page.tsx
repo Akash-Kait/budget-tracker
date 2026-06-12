@@ -1,4 +1,5 @@
 import { Panel } from '@/components/wealth/Panel';
+import { CollapsibleHoldingsPanel } from '@/components/wealth/CollapsibleHoldingsPanel';
 import { EcasUnifiedImportPanel } from '@/components/wealth/EcasUnifiedImportPanel';
 import { WealthAssetForm } from '@/components/wealth/WealthAssetForm';
 import { WealthAssetRow } from '@/components/wealth/WealthAssetRow';
@@ -116,10 +117,11 @@ export default async function WealthPage() {
             ))}
           </div>
 
-          {/* Holdings — calm grouped table */}
+          {/* Holdings — calm grouped table. Each section collapses independently (default collapsed:
+              the overview above stays the focus; expand a section to see its per-holding detail). */}
           <section className="space-y-4">
             {groups.map((g) => (
-              <Panel
+              <CollapsibleHoldingsPanel
                 key={g.type}
                 title={g.label}
                 right={
@@ -135,7 +137,7 @@ export default async function WealthPage() {
                 {g.assets.map((a) => (
                   <WealthAssetRow key={a.id} asset={a} stale={isAssetStale(a)} />
                 ))}
-              </Panel>
+              </CollapsibleHoldingsPanel>
             ))}
           </section>
 
